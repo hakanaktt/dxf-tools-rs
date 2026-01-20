@@ -53,3 +53,6 @@ codegen-units = 1
 [profile.bench]
 inherits = "release"
 
+[workspace]
+members = ["dxf-tools-wasm"]
+

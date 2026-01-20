@@ -25,6 +25,28 @@ pub struct DxfReader {
 }
 
 impl DxfReader {
+    /// Create a new DXF reader from any reader
+    pub fn from_reader<R: Read + Seek + 'static>(reader: R) -> Result<Self> {
+        let mut buf_reader = BufReader::new(reader);
+
+        // Detect if binary
+        let is_binary = Self::is_binary(&mut buf_reader)?;
+
+        // Create appropriate reader
+        let reader: Box<dyn DxfStreamReader> = if is_binary {
+            Box::new(DxfBinaryReader::new(buf_reader)?)
+        } else {
+            // Seek back to start for text DXF files
+            buf_reader.seek(std::io::SeekFrom::Start(0))?;
+            Box::new(DxfTextReader::new(buf_reader)?)
+        };
+
+        Ok(Self {
+            reader,
+            version: DxfVersion::Unknown,
+        })
+    }
+
     /// Create a new DXF reader from a file path
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(path)?;
