@@ -369,7 +369,6 @@ DXF-Tools-RS is optimized for performance:
 - [ ] SVG/PDF export
 - [ ] Spatial indexing for large drawings
 - [ ] LISP expression evaluation
-- [ ] Cloud-based file operations
 
 ---
 
@@ -387,7 +386,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ```bash
 # Clone the repository
-git clone https://github.com/HakanAkerworksANP/dxf-tools-rs.git
+git clone https://github.com/hakanaktt/dxf-tools-rs.git
 cd dxf-tools-rs
 
 # Build the project
@@ -409,16 +408,6 @@ cargo clippy
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-```
-MIT License
-
-Copyright (c) 2025 Hakan AK
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction...
-```
-
 ---
 
 ## 🙏 Acknowledgments
@@ -431,8 +420,8 @@ in the Software without restriction...
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/HakanAkerworksANP/dxf-tools-rs/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/HakanAkerworksANP/dxf-tools-rs/discussions)
+- **Issues**: [GitHub Issues](https://github.com/hakanaktt/dxf-tools-rs/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/hakanaktt/dxf-tools-rs/discussions)
 
 ---
 
