@@ -136,7 +136,7 @@ Add DXF-Tools-RS to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-dxf-tools-rs = "0.1.3"
+dxf-tools-rs = "0.1.4"
 ```
 
 Or install via cargo:
