@@ -55,3 +55,12 @@ pub use handle_reader::DwgHandleReader;
 pub use object_reader::{DwgObjectReader, DwgEntityData, DwgObjectData, CadTemplate};
 pub use section_reader::{DwgSectionData, DwgSectionReaderAC15, DwgSectionReaderAC18};
 pub use template_builder::DwgTemplateBuilder;
+
+// Writer modules
+pub mod stream_writer;
+pub mod compressor;
+pub mod writer;
+
+pub use stream_writer::DwgStreamWriter;
+pub use compressor::Lz77AC18Compressor;
+pub use writer::DwgWriter;

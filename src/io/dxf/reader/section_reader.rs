@@ -275,6 +275,121 @@ impl<'a> SectionReader<'a> {
                             block_entities.push(EntityType::Spline(entity));
                         }
                     }
+                    "DIMENSION" => {
+                        if let Some(entity) = self.read_dimension()? {
+                            block_entities.push(EntityType::Dimension(entity));
+                        }
+                    }
+                    "HATCH" => {
+                        if let Some(entity) = self.read_hatch()? {
+                            block_entities.push(EntityType::Hatch(entity));
+                        }
+                    }
+                    "SOLID" => {
+                        if let Some(entity) = self.read_solid()? {
+                            block_entities.push(EntityType::Solid(entity));
+                        }
+                    }
+                    "3DFACE" => {
+                        if let Some(entity) = self.read_face3d()? {
+                            block_entities.push(EntityType::Face3D(entity));
+                        }
+                    }
+                    "INSERT" => {
+                        if let Some(entity) = self.read_insert()? {
+                            block_entities.push(EntityType::Insert(entity));
+                        }
+                    }
+                    "RAY" => {
+                        if let Some(entity) = self.read_ray()? {
+                            block_entities.push(EntityType::Ray(entity));
+                        }
+                    }
+                    "XLINE" => {
+                        if let Some(entity) = self.read_xline()? {
+                            block_entities.push(EntityType::XLine(entity));
+                        }
+                    }
+                    "ATTDEF" => {
+                        if let Some(entity) = self.read_attdef()? {
+                            block_entities.push(EntityType::AttributeDefinition(entity));
+                        }
+                    }
+                    "ATTRIB" => {
+                        if let Some(entity) = self.read_attrib()? {
+                            block_entities.push(EntityType::AttributeEntity(entity));
+                        }
+                    }
+                    "TOLERANCE" => {
+                        if let Some(entity) = self.read_tolerance()? {
+                            block_entities.push(EntityType::Tolerance(entity));
+                        }
+                    }
+                    "SHAPE" => {
+                        if let Some(entity) = self.read_shape()? {
+                            block_entities.push(EntityType::Shape(entity));
+                        }
+                    }
+                    "WIPEOUT" => {
+                        if let Some(entity) = self.read_wipeout()? {
+                            block_entities.push(EntityType::Wipeout(entity));
+                        }
+                    }
+                    "VIEWPORT" => {
+                        if let Some(entity) = self.read_viewport()? {
+                            block_entities.push(EntityType::Viewport(entity));
+                        }
+                    }
+                    "LEADER" => {
+                        if let Some(entity) = self.read_leader()? {
+                            block_entities.push(EntityType::Leader(entity));
+                        }
+                    }
+                    "MULTILEADER" | "MLEADER" => {
+                        if let Some(entity) = self.read_multileader()? {
+                            block_entities.push(EntityType::MultiLeader(entity));
+                        }
+                    }
+                    "MLINE" => {
+                        if let Some(entity) = self.read_mline()? {
+                            block_entities.push(EntityType::MLine(entity));
+                        }
+                    }
+                    "MESH" => {
+                        if let Some(entity) = self.read_mesh()? {
+                            block_entities.push(EntityType::Mesh(entity));
+                        }
+                    }
+                    "3DSOLID" => {
+                        if let Some(entity) = self.read_solid3d()? {
+                            block_entities.push(EntityType::Solid3D(entity));
+                        }
+                    }
+                    "REGION" => {
+                        if let Some(entity) = self.read_region()? {
+                            block_entities.push(EntityType::Region(entity));
+                        }
+                    }
+                    "BODY" => {
+                        if let Some(entity) = self.read_body()? {
+                            block_entities.push(EntityType::Body(entity));
+                        }
+                    }
+                    "IMAGE" => {
+                        if let Some(entity) = self.read_raster_image()? {
+                            block_entities.push(EntityType::RasterImage(entity));
+                        }
+                    }
+                    "PDFUNDERLAY" | "DWFUNDERLAY" | "DGNUNDERLAY" => {
+                        if let Some(entity) = self.read_underlay()? {
+                            block_entities.push(EntityType::Underlay(entity));
+                        }
+                    }
+                    "ACAD_TABLE" => {
+                        if let Some(entity) = self.read_table_entity()? {
+                            block_entities.push(EntityType::Table(entity));
+                        }
+                    }
                     _ => {
                         // Skip unknown entity type
                     }
@@ -436,6 +551,66 @@ impl<'a> SectionReader<'a> {
                     "WIPEOUT" => {
                         if let Some(entity) = self.read_wipeout()? {
                             let _ = document.add_entity(EntityType::Wipeout(entity));
+                        }
+                    }
+                    "VIEWPORT" => {
+                        if let Some(entity) = self.read_viewport()? {
+                            let _ = document.add_entity(EntityType::Viewport(entity));
+                        }
+                    }
+                    "LEADER" => {
+                        if let Some(entity) = self.read_leader()? {
+                            let _ = document.add_entity(EntityType::Leader(entity));
+                        }
+                    }
+                    "MULTILEADER" | "MLEADER" => {
+                        if let Some(entity) = self.read_multileader()? {
+                            let _ = document.add_entity(EntityType::MultiLeader(entity));
+                        }
+                    }
+                    "MLINE" => {
+                        if let Some(entity) = self.read_mline()? {
+                            let _ = document.add_entity(EntityType::MLine(entity));
+                        }
+                    }
+                    "MESH" => {
+                        if let Some(entity) = self.read_mesh()? {
+                            let _ = document.add_entity(EntityType::Mesh(entity));
+                        }
+                    }
+                    "3DSOLID" => {
+                        if let Some(entity) = self.read_solid3d()? {
+                            let _ = document.add_entity(EntityType::Solid3D(entity));
+                        }
+                    }
+                    "REGION" => {
+                        if let Some(entity) = self.read_region()? {
+                            let _ = document.add_entity(EntityType::Region(entity));
+                        }
+                    }
+                    "BODY" => {
+                        if let Some(entity) = self.read_body()? {
+                            let _ = document.add_entity(EntityType::Body(entity));
+                        }
+                    }
+                    "IMAGE" => {
+                        if let Some(entity) = self.read_raster_image()? {
+                            let _ = document.add_entity(EntityType::RasterImage(entity));
+                        }
+                    }
+                    "PDFUNDERLAY" | "DWFUNDERLAY" | "DGNUNDERLAY" => {
+                        if let Some(entity) = self.read_underlay()? {
+                            let _ = document.add_entity(EntityType::Underlay(entity));
+                        }
+                    }
+                    "ATTRIB" => {
+                        if let Some(entity) = self.read_attrib()? {
+                            let _ = document.add_entity(EntityType::AttributeEntity(entity));
+                        }
+                    }
+                    "ACAD_TABLE" => {
+                        if let Some(entity) = self.read_table_entity()? {
+                            let _ = document.add_entity(EntityType::Table(entity));
                         }
                     }
                     _ => {
@@ -2449,6 +2624,512 @@ impl<'a> SectionReader<'a> {
         wipeout.v_vector = v_vector.get_point().unwrap_or(Vector3::new(0.0, 1.0, 0.0));
 
         Ok(Some(wipeout))
+    }
+
+    /// Read a VIEWPORT entity
+    fn read_viewport(&mut self) -> Result<Option<Viewport>> {
+        let mut vp = Viewport::new();
+        let mut center = PointReader::new();
+        let mut view_dir = PointReader::new();
+        let mut view_target = PointReader::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => vp.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { vp.common.color = Color::from_index(ci); } }
+                10 | 20 | 30 => { center.add_coordinate(&pair); }
+                40 => { if let Some(v) = pair.as_double() { vp.width = v; } }
+                41 => { if let Some(v) = pair.as_double() { vp.height = v; } }
+                68 => { if let Some(v) = pair.as_i16() { vp.id = v; } }
+                12 => { if let Some(v) = pair.as_double() { vp.view_center.x = v; } }
+                22 => { if let Some(v) = pair.as_double() { vp.view_center.y = v; } }
+                13 => { if let Some(v) = pair.as_double() { vp.snap_base.x = v; } }
+                23 => { if let Some(v) = pair.as_double() { vp.snap_base.y = v; } }
+                14 => { if let Some(v) = pair.as_double() { vp.snap_spacing.x = v; } }
+                24 => { if let Some(v) = pair.as_double() { vp.snap_spacing.y = v; } }
+                15 => { if let Some(v) = pair.as_double() { vp.grid_spacing.x = v; } }
+                25 => { if let Some(v) = pair.as_double() { vp.grid_spacing.y = v; } }
+                16 | 26 | 36 => { view_dir.add_coordinate(&pair); }
+                17 | 27 | 37 => { view_target.add_coordinate(&pair); }
+                42 => { if let Some(v) = pair.as_double() { vp.lens_length = v; } }
+                43 => { if let Some(v) = pair.as_double() { vp.front_clip_z = v; } }
+                44 => { if let Some(v) = pair.as_double() { vp.back_clip_z = v; } }
+                45 => { if let Some(v) = pair.as_double() { vp.view_height = v; } }
+                50 => { if let Some(v) = pair.as_double() { vp.snap_angle = v; } }
+                51 => { if let Some(v) = pair.as_double() { vp.twist_angle = v; } }
+                72 => { if let Some(v) = pair.as_i16() { vp.circle_sides = v; } }
+                281 => { if let Some(v) = pair.as_i16() { vp.render_mode = viewport::ViewportRenderMode::from_value(v); } }
+                _ => {}
+            }
+        }
+        if let Some(pt) = center.get_point() { vp.center = pt; }
+        if let Some(pt) = view_dir.get_point() { vp.view_direction = pt; }
+        if let Some(pt) = view_target.get_point() { vp.view_target = pt; }
+        Ok(Some(vp))
+    }
+
+    /// Read a LEADER entity
+    fn read_leader(&mut self) -> Result<Option<Leader>> {
+        let mut leader = Leader::new();
+        let mut normal = PointReader::new();
+        let mut horiz_dir = PointReader::new();
+        let mut block_offset = PointReader::new();
+        let mut ann_offset = PointReader::new();
+        let mut vertex_count: usize = 0;
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => leader.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { leader.common.color = Color::from_index(ci); } }
+                3 => leader.dimension_style = pair.value_string.clone(),
+                71 => { if let Some(v) = pair.as_i16() { leader.arrow_enabled = v != 0; } }
+                72 => { if let Some(v) = pair.as_i16() { leader.path_type = leader::LeaderPathType::from_value(v); } }
+                73 => { if let Some(v) = pair.as_i16() { leader.creation_type = leader::LeaderCreationType::from_value(v); } }
+                74 => { if let Some(v) = pair.as_i16() { leader.hookline_direction = leader::HooklineDirection::from_value(v); } }
+                75 => { if let Some(v) = pair.as_i16() { leader.hookline_enabled = v != 0; } }
+                40 => { if let Some(v) = pair.as_double() { leader.text_height = v; } }
+                41 => { if let Some(v) = pair.as_double() { leader.text_width = v; } }
+                76 => { if let Some(v) = pair.as_i16() { vertex_count = v as usize; } }
+                10 => {
+                    if let Some(x) = pair.as_double() {
+                        leader.vertices.push(Vector3::new(x, 0.0, 0.0));
+                    }
+                }
+                20 => { if let Some(y) = pair.as_double() { if let Some(last) = leader.vertices.last_mut() { last.y = y; } } }
+                30 => { if let Some(z) = pair.as_double() { if let Some(last) = leader.vertices.last_mut() { last.z = z; } } }
+                210 | 220 | 230 => { normal.add_coordinate(&pair); }
+                211 | 221 | 231 => { horiz_dir.add_coordinate(&pair); }
+                212 | 222 | 232 => { block_offset.add_coordinate(&pair); }
+                213 | 223 | 233 => { ann_offset.add_coordinate(&pair); }
+                _ => {}
+            }
+        }
+        if let Some(pt) = normal.get_point() { leader.normal = pt; }
+        if let Some(pt) = horiz_dir.get_point() { leader.horizontal_direction = pt; }
+        if let Some(pt) = block_offset.get_point() { leader.block_offset = pt; }
+        if let Some(pt) = ann_offset.get_point() { leader.annotation_offset = pt; }
+        Ok(Some(leader))
+    }
+
+    /// Read a MULTILEADER (MLEADER) entity
+    fn read_multileader(&mut self) -> Result<Option<MultiLeader>> {
+        let mut ml = MultiLeader::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => ml.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { ml.common.color = Color::from_index(ci); } }
+                170 => { if let Some(v) = pair.as_i16() { ml.content_type = multileader::LeaderContentType::from(v); } }
+                340 => { if let Some(h) = pair.as_handle() { ml.style_handle = Some(Handle::new(h)); } }
+                171 => { if let Some(v) = pair.as_i16() { ml.path_type = multileader::MultiLeaderPathType::from(v); } }
+                290 => { if let Some(v) = pair.as_i16() { ml.enable_landing = v != 0; } }
+                291 => { if let Some(v) = pair.as_i16() { ml.enable_dogleg = v != 0; } }
+                41 => { if let Some(v) = pair.as_double() { ml.dogleg_length = v; } }
+                42 => { if let Some(v) = pair.as_double() { ml.arrowhead_size = v; } }
+                173 => { if let Some(v) = pair.as_i16() { ml.text_left_attachment = multileader::TextAttachmentType::from(v); } }
+                174 => { if let Some(v) = pair.as_i16() { ml.text_angle_type = multileader::TextAngleType::from(v); } }
+                175 => { if let Some(v) = pair.as_i16() { ml.text_alignment = multileader::TextAlignmentType::from(v); } }
+                292 => { if let Some(v) = pair.as_i16() { ml.text_frame = v != 0; } }
+                293 => { if let Some(v) = pair.as_i16() { ml.enable_annotation_scale = v != 0; } }
+                294 => { if let Some(v) = pair.as_i16() { ml.text_direction_negative = v != 0; } }
+                45 => { if let Some(v) = pair.as_double() { ml.scale_factor = v; } }
+                _ => {}
+            }
+        }
+        Ok(Some(ml))
+    }
+
+    /// Read an MLINE entity
+    fn read_mline(&mut self) -> Result<Option<MLine>> {
+        let mut ml = MLine::new();
+        let mut start_pt = PointReader::new();
+        let mut normal = PointReader::new();
+        let mut vertex_count: usize = 0;
+        let mut element_count: usize = 0;
+        // Collect vertices
+        let mut current_vertex: Option<mline::MLineVertex> = None;
+        let mut current_seg_params: Vec<f64> = Vec::new();
+        let mut current_area_params: Vec<f64> = Vec::new();
+        let mut reading_segments = false;
+        let mut seg_param_count: usize = 0;
+        let mut area_param_count: usize = 0;
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => ml.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { ml.common.color = Color::from_index(ci); } }
+                2 => ml.style_name = pair.value_string.clone(),
+                340 => { if let Some(h) = pair.as_handle() { ml.style_handle = Some(Handle::new(h)); } }
+                40 => { if let Some(v) = pair.as_double() {
+                    if reading_segments {
+                        // Could be segment parameter
+                        current_seg_params.push(v);
+                    } else {
+                        ml.scale_factor = v;
+                    }
+                } }
+                70 => { if let Some(v) = pair.as_i16() { ml.justification = mline::MLineJustification::from(v); } }
+                71 => { if let Some(v) = pair.as_i16() { ml.flags = mline::MLineFlags::from_bits_truncate(v); } }
+                72 => { if let Some(v) = pair.as_i16() { vertex_count = v as usize; } }
+                73 => { if let Some(v) = pair.as_i16() { element_count = v as usize; ml.style_element_count = element_count; } }
+                10 | 20 | 30 => { start_pt.add_coordinate(&pair); }
+                210 | 220 | 230 => { normal.add_coordinate(&pair); }
+                11 => {
+                    // New vertex position - save previous
+                    if let Some(v) = current_vertex.take() {
+                        ml.vertices.push(v);
+                    }
+                    if let Some(x) = pair.as_double() {
+                        let mut v = mline::MLineVertex {
+                            position: Vector3::new(x, 0.0, 0.0),
+                            direction: Vector3::zero(),
+                            miter: Vector3::zero(),
+                            segments: Vec::new(),
+                        };
+                        current_vertex = Some(v);
+                        reading_segments = true;
+                    }
+                }
+                21 => { if let Some(y) = pair.as_double() { if let Some(ref mut v) = current_vertex { v.position.y = y; } } }
+                31 => { if let Some(z) = pair.as_double() { if let Some(ref mut v) = current_vertex { v.position.z = z; } } }
+                12 => { if let Some(x) = pair.as_double() { if let Some(ref mut v) = current_vertex { v.direction.x = x; } } }
+                22 => { if let Some(y) = pair.as_double() { if let Some(ref mut v) = current_vertex { v.direction.y = y; } } }
+                32 => { if let Some(z) = pair.as_double() { if let Some(ref mut v) = current_vertex { v.direction.z = z; } } }
+                13 => { if let Some(x) = pair.as_double() { if let Some(ref mut v) = current_vertex { v.miter.x = x; } } }
+                23 => { if let Some(y) = pair.as_double() { if let Some(ref mut v) = current_vertex { v.miter.y = y; } } }
+                33 => { if let Some(z) = pair.as_double() { if let Some(ref mut v) = current_vertex { v.miter.z = z; } } }
+                74 => {
+                    // Save previous segment if any
+                    if !current_seg_params.is_empty() || !current_area_params.is_empty() {
+                        if let Some(ref mut v) = current_vertex {
+                            v.segments.push(mline::MLineSegment {
+                                parameters: std::mem::take(&mut current_seg_params),
+                                area_fill_parameters: std::mem::take(&mut current_area_params),
+                            });
+                        }
+                    }
+                    if let Some(v) = pair.as_i16() { seg_param_count = v as usize; }
+                }
+                41 => { if let Some(v) = pair.as_double() { current_seg_params.push(v); } }
+                75 => { if let Some(v) = pair.as_i16() { area_param_count = v as usize; } }
+                42 => { if let Some(v) = pair.as_double() { current_area_params.push(v); } }
+                _ => {}
+            }
+        }
+        // Save last segment and vertex
+        if !current_seg_params.is_empty() || !current_area_params.is_empty() {
+            if let Some(ref mut v) = current_vertex {
+                v.segments.push(mline::MLineSegment {
+                    parameters: current_seg_params,
+                    area_fill_parameters: current_area_params,
+                });
+            }
+        }
+        if let Some(v) = current_vertex.take() {
+            ml.vertices.push(v);
+        }
+        if let Some(pt) = start_pt.get_point() { ml.start_point = pt; }
+        if let Some(pt) = normal.get_point() { ml.normal = pt; }
+        Ok(Some(ml))
+    }
+
+    /// Read a MESH entity
+    fn read_mesh(&mut self) -> Result<Option<Mesh>> {
+        let mut mesh = Mesh::new();
+        let mut reading_vertices = false;
+        let mut reading_faces = false;
+        let mut reading_edges = false;
+        let mut reading_creases = false;
+        let mut current_face_indices: Vec<usize> = Vec::new();
+        let mut face_remaining: usize = 0;
+        let mut edge_values: Vec<usize> = Vec::new();
+        let mut crease_edge_indices: Vec<usize> = Vec::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => mesh.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { mesh.common.color = Color::from_index(ci); } }
+                71 => { if let Some(v) = pair.as_i16() { mesh.version = v; } }
+                72 => { if let Some(v) = pair.as_i16() { mesh.blend_crease = v != 0; } }
+                91 => { if let Some(v) = pair.as_i32() { mesh.subdivision_level = v; } }
+                92 => {
+                    // Start vertex reading
+                    reading_vertices = true;
+                    reading_faces = false; reading_edges = false; reading_creases = false;
+                }
+                93 => {
+                    // Start face list
+                    reading_vertices = false;
+                    reading_faces = true; reading_edges = false; reading_creases = false;
+                }
+                94 => {
+                    // Start edge list
+                    reading_vertices = false; reading_faces = false;
+                    reading_edges = true; reading_creases = false;
+                }
+                95 => {
+                    // Start crease list
+                    reading_vertices = false; reading_faces = false; reading_edges = false;
+                    reading_creases = true;
+                }
+                10 => {
+                    if reading_vertices {
+                        if let Some(x) = pair.as_double() {
+                            mesh.vertices.push(Vector3::new(x, 0.0, 0.0));
+                        }
+                    }
+                }
+                20 => { if reading_vertices { if let Some(y) = pair.as_double() { if let Some(last) = mesh.vertices.last_mut() { last.y = y; } } } }
+                30 => { if reading_vertices { if let Some(z) = pair.as_double() { if let Some(last) = mesh.vertices.last_mut() { last.z = z; } } } }
+                90 => {
+                    if let Some(v) = pair.as_i32() {
+                        let val = v as usize;
+                        if reading_faces {
+                            if face_remaining == 0 {
+                                // This is the vertex count for a new face
+                                face_remaining = val;
+                                current_face_indices.clear();
+                            } else {
+                                current_face_indices.push(val);
+                                face_remaining -= 1;
+                                if face_remaining == 0 {
+                                    mesh.faces.push(mesh::MeshFace { vertices: std::mem::take(&mut current_face_indices) });
+                                }
+                            }
+                        } else if reading_edges {
+                            edge_values.push(val);
+                            if edge_values.len() % 2 == 0 {
+                                let end = edge_values[edge_values.len() - 1];
+                                let start = edge_values[edge_values.len() - 2];
+                                mesh.edges.push(mesh::MeshEdge { start, end, crease: None });
+                            }
+                        } else if reading_creases {
+                            crease_edge_indices.push(val);
+                        }
+                    }
+                }
+                140 => {
+                    if reading_creases {
+                        if let Some(v) = pair.as_double() {
+                            if let Some(idx) = crease_edge_indices.pop() {
+                                if idx < mesh.edges.len() {
+                                    mesh.edges[idx].crease = Some(v);
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(Some(mesh))
+    }
+
+    /// Read a 3DSOLID entity
+    fn read_solid3d(&mut self) -> Result<Option<Solid3D>> {
+        let mut solid = Solid3D::new();
+        let mut sat_chunks: Vec<String> = Vec::new();
+        let mut sat_last: Vec<String> = Vec::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => solid.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { solid.common.color = Color::from_index(ci); } }
+                70 => { if let Some(v) = pair.as_i16() { solid.acis_data.version = solid3d::AcisVersion::from(v as u8); } }
+                1 => { sat_chunks.push(pair.value_string.clone()); }
+                3 => { sat_last.push(pair.value_string.clone()); }
+                350 => { if let Some(h) = pair.as_handle() { solid.history_handle = Some(Handle::new(h)); } }
+                _ => {}
+            }
+        }
+        // Assemble SAT data
+        let mut sat = String::new();
+        for chunk in &sat_chunks { sat.push_str(chunk); }
+        for chunk in &sat_last { sat.push_str(chunk); }
+        solid.acis_data.sat_data = sat;
+        Ok(Some(solid))
+    }
+
+    /// Read a REGION entity
+    fn read_region(&mut self) -> Result<Option<Region>> {
+        let mut region = Region::new();
+        let mut sat_chunks: Vec<String> = Vec::new();
+        let mut sat_last: Vec<String> = Vec::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => region.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { region.common.color = Color::from_index(ci); } }
+                70 => { if let Some(v) = pair.as_i16() { region.acis_data.version = solid3d::AcisVersion::from(v as u8); } }
+                1 => { sat_chunks.push(pair.value_string.clone()); }
+                3 => { sat_last.push(pair.value_string.clone()); }
+                _ => {}
+            }
+        }
+        let mut sat = String::new();
+        for chunk in &sat_chunks { sat.push_str(chunk); }
+        for chunk in &sat_last { sat.push_str(chunk); }
+        region.acis_data.sat_data = sat;
+        Ok(Some(region))
+    }
+
+    /// Read a BODY entity
+    fn read_body(&mut self) -> Result<Option<Body>> {
+        let mut body = Body::new();
+        let mut sat_chunks: Vec<String> = Vec::new();
+        let mut sat_last: Vec<String> = Vec::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => body.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { body.common.color = Color::from_index(ci); } }
+                70 => { if let Some(v) = pair.as_i16() { body.acis_data.version = solid3d::AcisVersion::from(v as u8); } }
+                1 => { sat_chunks.push(pair.value_string.clone()); }
+                3 => { sat_last.push(pair.value_string.clone()); }
+                _ => {}
+            }
+        }
+        let mut sat = String::new();
+        for chunk in &sat_chunks { sat.push_str(chunk); }
+        for chunk in &sat_last { sat.push_str(chunk); }
+        body.acis_data.sat_data = sat;
+        Ok(Some(body))
+    }
+
+    /// Read an IMAGE entity
+    fn read_raster_image(&mut self) -> Result<Option<RasterImage>> {
+        let mut img = RasterImage::new("", Vector3::zero(), 1.0, 1.0);
+        let mut insertion = PointReader::new();
+        let mut u_vec = PointReader::new();
+        let mut v_vec = PointReader::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => img.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { img.common.color = Color::from_index(ci); } }
+                90 => { if let Some(v) = pair.as_i32() { img.class_version = v; } }
+                10 | 20 | 30 => { insertion.add_coordinate(&pair); }
+                11 | 21 | 31 => { u_vec.add_coordinate(&pair); }
+                12 | 22 | 32 => { v_vec.add_coordinate(&pair); }
+                13 => { if let Some(v) = pair.as_double() { img.size.x = v; } }
+                23 => { if let Some(v) = pair.as_double() { img.size.y = v; } }
+                340 => { if let Some(h) = pair.as_handle() { img.definition_handle = Some(Handle::new(h)); } }
+                70 => { if let Some(v) = pair.as_i16() { img.flags = raster_image::ImageDisplayFlags::from_bits_truncate(v); } }
+                280 => { if let Some(v) = pair.as_i16() { img.clipping_enabled = v != 0; } }
+                281 => { if let Some(v) = pair.as_i16() { img.brightness = v as u8; } }
+                282 => { if let Some(v) = pair.as_i16() { img.contrast = v as u8; } }
+                283 => { if let Some(v) = pair.as_i16() { img.fade = v as u8; } }
+                360 => { if let Some(h) = pair.as_handle() { img.definition_reactor_handle = Some(Handle::new(h)); } }
+                _ => {}
+            }
+        }
+        img.insertion_point = insertion.get_point().unwrap_or(Vector3::zero());
+        img.u_vector = u_vec.get_point().unwrap_or(Vector3::new(1.0, 0.0, 0.0));
+        img.v_vector = v_vec.get_point().unwrap_or(Vector3::new(0.0, 1.0, 0.0));
+        Ok(Some(img))
+    }
+
+    /// Read an UNDERLAY entity (PDF/DWF/DGN)
+    fn read_underlay(&mut self) -> Result<Option<Underlay>> {
+        let mut ul = Underlay::pdf();
+        let mut insertion = PointReader::new();
+        let mut normal = PointReader::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => ul.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { ul.common.color = Color::from_index(ci); } }
+                340 => { if let Some(h) = pair.as_handle() { ul.definition_handle = Handle::new(h); } }
+                10 | 20 | 30 => { insertion.add_coordinate(&pair); }
+                41 => { if let Some(v) = pair.as_double() { ul.x_scale = v; } }
+                42 => { if let Some(v) = pair.as_double() { ul.y_scale = v; } }
+                43 => { if let Some(v) = pair.as_double() { ul.z_scale = v; } }
+                50 => { if let Some(v) = pair.as_double() { ul.rotation = v; } }
+                210 | 220 | 230 => { normal.add_coordinate(&pair); }
+                280 => { if let Some(v) = pair.as_i16() { ul.flags = underlay::UnderlayDisplayFlags::from_bits_truncate(v as u8); } }
+                281 => { if let Some(v) = pair.as_i16() { ul.contrast = v as u8; } }
+                282 => { if let Some(v) = pair.as_i16() { ul.fade = v as u8; } }
+                11 => {
+                    if let Some(x) = pair.as_double() {
+                        ul.clip_boundary_vertices.push(Vector2::new(x, 0.0));
+                    }
+                }
+                21 => { if let Some(y) = pair.as_double() { if let Some(last) = ul.clip_boundary_vertices.last_mut() { last.y = y; } } }
+                _ => {}
+            }
+        }
+        if let Some(pt) = insertion.get_point() { ul.insertion_point = pt; }
+        if let Some(pt) = normal.get_point() { ul.normal = pt; }
+        Ok(Some(ul))
+    }
+
+    /// Read an ATTRIB entity
+    fn read_attrib(&mut self) -> Result<Option<AttributeEntity>> {
+        let mut attrib = AttributeEntity::new(String::new(), String::new());
+        let mut insertion = PointReader::new();
+        let mut alignment = PointReader::new();
+        let mut normal = PointReader::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => attrib.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { attrib.common.color = Color::from_index(ci); } }
+                10 | 20 | 30 => { insertion.add_coordinate(&pair); }
+                11 | 21 | 31 => { alignment.add_coordinate(&pair); }
+                40 => { if let Some(v) = pair.as_double() { attrib.height = v; } }
+                1 => attrib.value = pair.value_string.clone(),
+                2 => attrib.tag = pair.value_string.clone(),
+                50 => { if let Some(v) = pair.as_double() { attrib.rotation = v; } }
+                41 => { if let Some(v) = pair.as_double() { attrib.width_factor = v; } }
+                51 => { if let Some(v) = pair.as_double() { attrib.oblique_angle = v; } }
+                7 => attrib.text_style = pair.value_string.clone(),
+                70 => { if let Some(v) = pair.as_i16() { attrib.flags = attribute_definition::AttributeFlags::from_bits(v as i32); } }
+                71 => { if let Some(v) = pair.as_i16() { attrib.text_generation_flags = v; } }
+                72 => { if let Some(v) = pair.as_i16() { attrib.horizontal_alignment = attribute_definition::HorizontalAlignment::from_value(v); } }
+                74 => { if let Some(v) = pair.as_i16() { attrib.vertical_alignment = attribute_definition::VerticalAlignment::from_value(v); } }
+                73 => { if let Some(v) = pair.as_i16() { attrib.field_length = v; } }
+                230 | 220 | 210 => { normal.add_coordinate(&pair); }
+                _ => {}
+            }
+        }
+        if let Some(pt) = insertion.get_point() { attrib.insertion_point = pt; }
+        if let Some(pt) = alignment.get_point() { attrib.alignment_point = pt; }
+        if let Some(pt) = normal.get_point() { attrib.normal = pt; }
+        Ok(Some(attrib))
+    }
+
+    /// Read a ACAD_TABLE entity (simplified)
+    fn read_table_entity(&mut self) -> Result<Option<table::Table>> {
+        let mut tbl = table::Table::new(Vector3::zero(), 1, 1);
+        let mut insertion = PointReader::new();
+        let mut horiz_dir = PointReader::new();
+
+        while let Some(pair) = self.reader.read_pair()? {
+            if pair.code == 0 { self.reader.push_back(pair); break; }
+            match pair.code {
+                8 => tbl.common.layer = pair.value_string.clone(),
+                62 => { if let Some(ci) = pair.as_i16() { tbl.common.color = Color::from_index(ci); } }
+                10 | 20 | 30 => { insertion.add_coordinate(&pair); }
+                11 | 21 | 31 => { horiz_dir.add_coordinate(&pair); }
+                342 => { if let Some(h) = pair.as_handle() { tbl.table_style_handle = Some(Handle::new(h)); } }
+                280 => { if let Some(v) = pair.as_i16() { tbl.data_version = v; } }
+                _ => {}
+            }
+        }
+        if let Some(pt) = insertion.get_point() { tbl.insertion_point = pt; }
+        if let Some(pt) = horiz_dir.get_point() { tbl.horizontal_direction = pt; }
+        Ok(Some(tbl))
     }
 
     /// Read extended data (XDATA) from the current position

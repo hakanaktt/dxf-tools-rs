@@ -142,14 +142,15 @@ impl<R: Read + Seek> DwgClassesReader<R> {
             return Err(DxfError::InvalidHeader("Invalid classes start sentinel".to_string()));
         }
         
-        // Read section size
-        let _size = self.reader.read_raw_long()?;
+        // Read section size (in bytes for pre-R2007, this is the data size after this RL)
+        let size = self.reader.read_raw_long()? as i64;
         
         // R2007+: Size in bits
         let size_in_bits = if self.r2007_plus() {
             Some(self.reader.read_raw_long()? as u64)
         } else {
-            None
+            // For pre-R2007, convert byte size to approximate bit limit
+            Some((size as u64) * 8)
         };
         
         let initial_pos = self.reader.position_in_bits();
@@ -162,23 +163,21 @@ impl<R: Read + Seek> DwgClassesReader<R> {
             // Class number
             class.class_number = self.reader.read_bitshort()?;
             
-            // Check if we've reached a terminator (class number 0 typically indicates end)
-            // But actually we need to check sentinel, let's read the flags first
-            
             // Proxy flags
             class.proxy_flags = self.reader.read_bitshort()?;
             
-            // DXF class name
-            class.dxf_name = self.reader.read_variable_text(self.version)?;
-            
-            // C++ class name
-            class.cpp_class_name = self.reader.read_variable_text(self.version)?;
-            
-            // Application name
+            // App name (TV) - Note: C# reads App, Cpp, DXF in this order!
             class.application_name = self.reader.read_variable_text(self.version)?;
             
-            // Flags
-            class.was_proxy = self.reader.read_bitshort()? != 0;
+            // C++ class name (TV)
+            class.cpp_class_name = self.reader.read_variable_text(self.version)?;
+            
+            // DXF class name (TV)
+            class.dxf_name = self.reader.read_variable_text(self.version)?;
+            
+            // Was-a-zombie (B - single bit, NOT BS!)
+            class.was_proxy = self.reader.read_bit()?;
+            // Item class id (BS)
             let entity_flag = self.reader.read_bitshort()?;
             class.is_entity = (entity_flag & 0x01FF) == 0x01F2 || (entity_flag & 0x01FF) == 0x01F3;
             

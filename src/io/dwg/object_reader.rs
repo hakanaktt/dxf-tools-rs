@@ -571,6 +571,85 @@ pub enum CadTemplate {
         dimltex1_handle: Option<u64>,
         dimltex2_handle: Option<u64>,
     },
+    /// Leader entity
+    Leader {
+        entity_data: DwgEntityData,
+        annot_type: i16,
+        path_type: i16,
+        vertices: Vec<Vector3>,
+        normal: Vector3,
+        horizontal_direction: Vector3,
+        block_offset: Vector3,
+        annotation_offset: Vector3,
+        text_height: f64,
+        text_width: f64,
+        hookline_on_xdir: bool,
+        arrowhead_on: bool,
+        annotation_handle: Option<u64>,
+        dimstyle_handle: Option<u64>,
+    },
+    /// Tolerance entity
+    Tolerance {
+        entity_data: DwgEntityData,
+        insertion_point: Vector3,
+        direction: Vector3,
+        normal: Vector3,
+        text: String,
+        text_height: f64,
+        dimgap: f64,
+        dimstyle_handle: Option<u64>,
+    },
+    /// MLine entity
+    MLine {
+        entity_data: DwgEntityData,
+        scale_factor: f64,
+        justification: u8,
+        start_point: Vector3,
+        normal: Vector3,
+        open_closed: i16,
+        lines_in_style: u8,
+        vertices: Vec<MLineTemplateVertex>,
+        mline_style_handle: Option<u64>,
+    },
+    /// Shape entity
+    Shape {
+        entity_data: DwgEntityData,
+        insertion_point: Vector3,
+        size: f64,
+        rotation: f64,
+        relative_x_scale: f64,
+        oblique_angle: f64,
+        thickness: f64,
+        shape_index: u16,
+        normal: Vector3,
+        shapefile_handle: Option<u64>,
+    },
+    /// Dimension Angular 2-Line
+    DimAngular2Ln {
+        entity_data: DwgEntityData,
+        dim_common: DimCommonData,
+        dimension_arc: Vector3,
+        first_point: Vector3,
+        second_point: Vector3,
+        angle_vertex: Vector3,
+        definition_point: Vector3,
+    },
+    /// Region (ACIS body)
+    Region {
+        entity_data: DwgEntityData,
+        acis_empty: bool,
+    },
+    /// 3D Solid (ACIS solid)
+    Solid3D {
+        entity_data: DwgEntityData,
+        acis_empty: bool,
+        history_handle: Option<u64>,
+    },
+    /// Body (ACIS body)
+    Body {
+        entity_data: DwgEntityData,
+        acis_empty: bool,
+    },
     /// Unknown/unsupported type
     Unknown {
         object_type: u16,
@@ -672,6 +751,22 @@ pub struct LineTypeElement {
     pub text: String,
 }
 
+/// MLine vertex template data for DWG reading
+#[derive(Debug, Clone, Default)]
+pub struct MLineTemplateVertex {
+    pub position: Vector3,
+    pub direction: Vector3,
+    pub miter: Vector3,
+    pub segments: Vec<MLineTemplateSegment>,
+}
+
+/// MLine segment template data for DWG reading
+#[derive(Debug, Clone, Default)]
+pub struct MLineTemplateSegment {
+    pub parameters: Vec<f64>,
+    pub area_fill_params: Vec<f64>,
+}
+
 /// Reader for DWG objects section
 pub struct DwgObjectReader<R: Read + Seek> {
     /// The bit reader over the section data
@@ -720,31 +815,48 @@ impl<R: Read + Seek> DwgObjectReader<R> {
     
     /// Read all queued objects and return templates
     pub fn read(&mut self) -> Result<HashMap<u64, CadTemplate>> {
+        let mut not_in_map = 0;
+        let mut read_ok = 0;
+        let mut read_none = 0;
+        let mut read_err = 0;
+        let mut already_read = 0;
+        let initial_total = self.handle_queue.len();
+        let mut type_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        
         while let Some(handle) = self.handle_queue.pop_front() {
             // Skip if already read
             if self.read_handles.contains_key(&handle) {
+                already_read += 1;
                 continue;
             }
             
             // Get offset for this handle
             let offset = match self.handle_map.get(&handle) {
                 Some(&off) => off,
-                None => continue, // Handle not in map
+                None => { not_in_map += 1; continue; }
             };
             
             // Try to read the object
             match self.read_object_at(handle, offset) {
                 Ok(Some(template)) => {
+                    read_ok += 1;
                     self.templates.insert(handle, template);
                 }
                 Ok(None) => {
-                    // Object type not supported, skip
+                    read_none += 1;
+                    // Log what type returned None
+                    if let Some(&obj_type) = self.read_handles.get(&handle) {
+                        *type_counts.entry(format!("{:?}=None", obj_type)).or_insert(0) += 1;
+                    }
                 }
                 Err(e) => {
-                    // Already logged in read_object_at
+                    read_err += 1;
+                    let _ = (read_err, handle, offset, &e);
                 }
             }
         }
+        
+
         
         Ok(std::mem::take(&mut self.templates))
     }
@@ -816,9 +928,17 @@ impl<R: Read + Seek> DwgObjectReader<R> {
             ObjectType::DimensionLinear => self.read_dim_linear().map(Some),
             ObjectType::DimensionAligned => self.read_dim_aligned().map(Some),
             ObjectType::DimensionAng3Pt => self.read_dim_angular3pt().map(Some),
+            ObjectType::DimensionAng2Ln => self.read_dim_angular2ln().map(Some),
             ObjectType::DimensionRadius => self.read_dim_radius().map(Some),
             ObjectType::DimensionDiameter => self.read_dim_diameter().map(Some),
             ObjectType::Hatch => self.read_hatch().map(Some),
+            ObjectType::Leader => self.read_leader().map(Some),
+            ObjectType::Tolerance => self.read_tolerance().map(Some),
+            ObjectType::MLine => self.read_mline().map(Some),
+            ObjectType::Shape => self.read_shape().map(Some),
+            ObjectType::Region => self.read_region().map(Some),
+            ObjectType::Solid3D => self.read_solid3d().map(Some),
+            ObjectType::Body => self.read_body().map(Some),
             ObjectType::Layer => self.read_layer().map(Some),
             ObjectType::Linetype => self.read_linetype().map(Some),
             ObjectType::ShapeFile => self.read_textstyle().map(Some),
@@ -836,14 +956,33 @@ impl<R: Read + Seek> DwgObjectReader<R> {
             ObjectType::AppIdControlObj => { self.read_control_object()?; Ok(None) },
             ObjectType::DimStyleControlObj => { self.read_control_object()?; Ok(None) },
             _ => {
-                // Unknown or unsupported type
-                Ok(None)
+                // Try class-based entity dispatch for type codes >= 500
+                if type_code >= 500 {
+                    // Extract class info first to avoid borrow conflict
+                    let class_info = self.classes.get(&(type_code as i16))
+                        .map(|c| (c.is_entity, c.dxf_name.clone()));
+                    if let Some((is_entity, dxf_name)) = class_info {
+                        if is_entity {
+                            match self.read_class_entity(&dxf_name) {
+                                Ok(Some(tmpl)) => Ok(Some(tmpl)),
+                                Ok(None) => Ok(None),
+                                Err(_) => Ok(None), // Skip on error
+                            }
+                        } else {
+                            Ok(None)
+                        }
+                    } else {
+                        Ok(None)
+                    }
+                } else {
+                    Ok(None)
+                }
             }
         };
         
-        // Log type on error for debugging
-        if let Err(ref e) = result {
-            eprintln!("Error reading type_code={} ({:?}) handle={}: {:?}", type_code, object_type, handle, e);
+        // Log type on error for debugging (limit output)
+        if let Err(ref _e) = result {
+            // Errors are tracked in the read() loop counters
         }
         
         result
@@ -851,13 +990,8 @@ impl<R: Read + Seek> DwgObjectReader<R> {
     
     /// Read the object type code
     fn read_object_type(&mut self) -> Result<u16> {
-        if self.version >= ACadVersion::AC1018 {
-            // R2004+: Object type is BS
-            Ok(self.reader.read_bitshort()? as u16)
-        } else {
-            // R13-R15: Object type is 2 bytes
-            Ok(self.reader.read_raw_ushort()?)
-        }
+        // Object type is always BS (bitshort) for all versions
+        Ok(self.reader.read_bitshort()? as u16)
     }
     
     /// Read xref-dependant bit from table entries (readXrefDependantBit in C#)
@@ -3570,5 +3704,373 @@ impl<R: Read + Seek> DwgObjectReader<R> {
         if let Some(h) = data.linetype_handle {
             self.handle_queue.push_back(h);
         }
+    }
+    
+    /// Read LEADER entity
+    fn read_leader(&mut self) -> Result<CadTemplate> {
+        let mut data = self.read_entity_data()?;
+        
+        let _unknown_bit = self.reader.read_bit()?;
+        let annot_type = self.reader.read_bitshort()?;
+        let path_type = self.reader.read_bitshort()?;
+        let numpts = self.reader.read_bitlong()? as usize;
+        
+        let mut vertices = Vec::with_capacity(numpts);
+        for _ in 0..numpts {
+            vertices.push(self.reader.read_3bitdouble()?);
+        }
+        
+        let _origin = self.reader.read_3bitdouble()?; // leader plane origin (discarded)
+        let normal = self.reader.read_3bitdouble()?;
+        let horizontal_direction = self.reader.read_3bitdouble()?;
+        let block_offset = self.reader.read_3bitdouble()?;
+        
+        // R14+ annotation offset
+        let annotation_offset = if self.version >= ACadVersion::AC1014 {
+            self.reader.read_3bitdouble()?
+        } else {
+            Vector3::new(0.0, 0.0, 0.0)
+        };
+        
+        // R13-R14: dimgap
+        if self.version <= ACadVersion::AC1014 {
+            let _dimgap = self.reader.read_bitdouble()?;
+        }
+        
+        // R2007 and earlier: text_height, text_width
+        let (text_height, text_width) = if self.version <= ACadVersion::AC1021 {
+            (self.reader.read_bitdouble()?, self.reader.read_bitdouble()?)
+        } else {
+            (0.0, 0.0)
+        };
+        
+        let hookline_on_xdir = self.reader.read_bit()?;
+        let arrowhead_on = self.reader.read_bit()?;
+        
+        // R13-R14: additional unused fields
+        if self.version <= ACadVersion::AC1014 {
+            let _arrowhead_type = self.reader.read_bitshort()?;
+            let _dimasz = self.reader.read_bitdouble()?;
+            let _unknown1 = self.reader.read_bit()?;
+            let _unknown2 = self.reader.read_bit()?;
+            let _unknown3 = self.reader.read_bitshort()?;
+            let _byblock_color = self.reader.read_bitshort()?;
+            let _unknown4 = self.reader.read_bit()?;
+            let _unknown5 = self.reader.read_bit()?;
+        }
+        
+        // R2000+: additional unused fields
+        if self.version >= ACadVersion::AC1015 {
+            let _unknown_s = self.reader.read_bitshort()?;
+            let _unknown_b1 = self.reader.read_bit()?;
+            let _unknown_b2 = self.reader.read_bit()?;
+        }
+        
+        // Handle section
+        self.read_entity_handles(&mut data)?;
+        let annotation_handle = self.reader.read_handle_reference(data.handle).ok();
+        let dimstyle_handle = self.reader.read_handle_reference(data.handle).ok();
+        
+        self.queue_entity_handles(&data);
+        
+        Ok(CadTemplate::Leader {
+            entity_data: data,
+            annot_type,
+            path_type,
+            vertices,
+            normal,
+            horizontal_direction,
+            block_offset,
+            annotation_offset,
+            text_height,
+            text_width,
+            hookline_on_xdir,
+            arrowhead_on,
+            annotation_handle,
+            dimstyle_handle,
+        })
+    }
+    
+    /// Read TOLERANCE entity
+    fn read_tolerance(&mut self) -> Result<CadTemplate> {
+        let mut data = self.read_entity_data()?;
+        
+        // R13-R14: extra fields
+        let (text_height, dimgap) = if self.version <= ACadVersion::AC1014 {
+            let _unknown_short = self.reader.read_bitshort()?;
+            let h = self.reader.read_bitdouble()?;
+            let g = self.reader.read_bitdouble()?;
+            (h, g)
+        } else {
+            (0.0, 0.0)
+        };
+        
+        let insertion_point = self.reader.read_3bitdouble()?;
+        let direction = self.reader.read_3bitdouble()?;
+        let normal = self.reader.read_3bitdouble()?;
+        let text = self.reader.read_variable_text(self.version)?;
+        
+        // Handle section
+        self.read_entity_handles(&mut data)?;
+        let dimstyle_handle = self.reader.read_handle_reference(data.handle).ok();
+        
+        self.queue_entity_handles(&data);
+        
+        Ok(CadTemplate::Tolerance {
+            entity_data: data,
+            insertion_point,
+            direction,
+            normal,
+            text,
+            text_height,
+            dimgap,
+            dimstyle_handle,
+        })
+    }
+    
+    /// Read MLINE entity
+    fn read_mline(&mut self) -> Result<CadTemplate> {
+        let mut data = self.read_entity_data()?;
+        
+        let scale_factor = self.reader.read_bitdouble()?;
+        let justification = self.reader.read_byte()? as u8;
+        let start_point = self.reader.read_3bitdouble()?;
+        let normal = self.reader.read_3bitdouble()?;
+        let open_closed = self.reader.read_bitshort()?;
+        let lines_in_style = self.reader.read_byte()? as u8;
+        let num_vertices = self.reader.read_bitshort()? as usize;
+        
+        let mut vertices = Vec::with_capacity(num_vertices);
+        for _ in 0..num_vertices {
+            let position = self.reader.read_3bitdouble()?;
+            let direction = self.reader.read_3bitdouble()?;
+            let miter = self.reader.read_3bitdouble()?;
+            
+            let mut segments = Vec::with_capacity(lines_in_style as usize);
+            for _ in 0..lines_in_style {
+                let num_seg_params = self.reader.read_bitshort()? as usize;
+                let mut parameters = Vec::with_capacity(num_seg_params);
+                for _ in 0..num_seg_params {
+                    parameters.push(self.reader.read_bitdouble()?);
+                }
+                let num_area_fill = self.reader.read_bitshort()? as usize;
+                let mut area_fill_params = Vec::with_capacity(num_area_fill);
+                for _ in 0..num_area_fill {
+                    area_fill_params.push(self.reader.read_bitdouble()?);
+                }
+                segments.push(MLineTemplateSegment { parameters, area_fill_params });
+            }
+            
+            vertices.push(MLineTemplateVertex { position, direction, miter, segments });
+        }
+        
+        // Handle section
+        self.read_entity_handles(&mut data)?;
+        let mline_style_handle = self.reader.read_handle_reference(data.handle).ok();
+        
+        self.queue_entity_handles(&data);
+        
+        Ok(CadTemplate::MLine {
+            entity_data: data,
+            scale_factor,
+            justification,
+            start_point,
+            normal,
+            open_closed,
+            lines_in_style,
+            vertices,
+            mline_style_handle,
+        })
+    }
+    
+    /// Read SHAPE entity
+    fn read_shape(&mut self) -> Result<CadTemplate> {
+        let mut data = self.read_entity_data()?;
+        
+        let insertion_point = self.reader.read_3bitdouble()?;
+        let size = self.reader.read_bitdouble()?;
+        let rotation = self.reader.read_bitdouble()?;
+        let relative_x_scale = self.reader.read_bitdouble()?;
+        let oblique_angle = self.reader.read_bitdouble()?;
+        let thickness = self.reader.read_bitdouble()?;
+        let shape_index = self.reader.read_bitshort()? as u16;
+        let normal = self.reader.read_3bitdouble()?;
+        
+        // Handle section
+        self.read_entity_handles(&mut data)?;
+        let shapefile_handle = self.reader.read_handle_reference(data.handle).ok();
+        
+        self.queue_entity_handles(&data);
+        
+        Ok(CadTemplate::Shape {
+            entity_data: data,
+            insertion_point,
+            size,
+            rotation,
+            relative_x_scale,
+            oblique_angle,
+            thickness,
+            shape_index,
+            normal,
+            shapefile_handle,
+        })
+    }
+    
+    /// Read DIMENSION_ANG_2_LN entity
+    fn read_dim_angular2ln(&mut self) -> Result<CadTemplate> {
+        let mut data = self.read_entity_data()?;
+        let mut dim_common = self.read_dim_common()?;
+        
+        // Angular 2-line specific: arc point, then def/ext lines, then angle vertex, then def point
+        let arc_x = self.reader.read_raw_double()?;
+        let arc_y = self.reader.read_raw_double()?;
+        let dimension_arc = Vector3::new(arc_x, arc_y, dim_common.elevation);
+        
+        let first_point = self.reader.read_3bitdouble()?;
+        let second_point = self.reader.read_3bitdouble()?;
+        let angle_vertex = self.reader.read_3bitdouble()?;
+        let definition_point = self.reader.read_3bitdouble()?;
+        
+        self.read_dim_handles(&mut data, &mut dim_common)?;
+        self.queue_entity_handles(&data);
+        
+        Ok(CadTemplate::DimAngular2Ln {
+            entity_data: data,
+            dim_common,
+            dimension_arc,
+            first_point,
+            second_point,
+            angle_vertex,
+            definition_point,
+        })
+    }
+    
+    /// Read the modeler geometry (ACIS) common to Region, Body, Solid3D
+    /// For now we skip ACIS data (same as ACadSharp which marks it as NOT IMPLEMENTED)
+    /// but we still create the template so the entity is recognized
+    fn read_modeler_geometry(&mut self) -> Result<(DwgEntityData, bool)> {
+        let mut data = self.read_entity_data()?;
+        
+        let acis_empty = self.reader.read_bit()?;
+        
+        if !acis_empty {
+            // Wireframe data present
+            let wireframe_present = self.reader.read_bit()?;
+            if wireframe_present {
+                let point_present = self.reader.read_bit()?;
+                if point_present {
+                    let _pt = self.reader.read_3bitdouble()?;
+                }
+                let _num_isolines = self.reader.read_bitlong()?;
+                let isolines_present = self.reader.read_bit()?;
+                if isolines_present {
+                    let num_wires = self.reader.read_bitlong()? as usize;
+                    for _ in 0..num_wires {
+                        self.read_wire()?;
+                    }
+                }
+                let num_silhouettes = self.reader.read_bitlong()? as usize;
+                for _ in 0..num_silhouettes {
+                    let _vp_id = self.reader.read_bitlonglong()?;
+                    let _vp_target = self.reader.read_3bitdouble()?;
+                    let _vp_dir = self.reader.read_3bitdouble()?;
+                    let _vp_up = self.reader.read_3bitdouble()?;
+                    let _vp_persp = self.reader.read_bit()?;
+                    let iso_present = self.reader.read_bit()?;
+                    if iso_present {
+                        let nw = self.reader.read_bitlong()? as usize;
+                        for _ in 0..nw {
+                            self.read_wire()?;
+                        }
+                    }
+                }
+                let _acis_empty2 = self.reader.read_bit()?;
+            }
+        }
+        
+        // R2007+: unknown BL
+        if self.version >= ACadVersion::AC1021 {
+            let _ = self.reader.read_bitlong();
+        }
+        
+        // ACIS data itself is not parsed (same as ACadSharp reference)
+        
+        self.read_entity_handles(&mut data)?;
+        self.queue_entity_handles(&data);
+        
+        Ok((data, acis_empty))
+    }
+    
+    /// Read a wire sub-structure (used by modeler geometry)
+    fn read_wire(&mut self) -> Result<()> {
+        let _wire_type = self.reader.read_byte()?;
+        let _selection_marker = self.reader.read_bitlong()?;
+        let _color = self.reader.read_bitshort()?;
+        let _acis_index = self.reader.read_bitlong()?;
+        let num_points = self.reader.read_bitlong()? as usize;
+        for _ in 0..num_points {
+            let _ = self.reader.read_3bitdouble()?;
+        }
+        let transform_present = self.reader.read_bit()?;
+        if transform_present {
+            let _x_axis = self.reader.read_3bitdouble()?;
+            let _y_axis = self.reader.read_3bitdouble()?;
+            let _z_axis = self.reader.read_3bitdouble()?;
+            let _translation = self.reader.read_3bitdouble()?;
+            let _scale = self.reader.read_bitdouble()?;
+            let _has_rotation = self.reader.read_bit()?;
+            let _has_reflection = self.reader.read_bit()?;
+            let _has_shear = self.reader.read_bit()?;
+        }
+        Ok(())
+    }
+    
+    /// Read REGION entity
+    fn read_region(&mut self) -> Result<CadTemplate> {
+        let (data, acis_empty) = self.read_modeler_geometry()?;
+        Ok(CadTemplate::Region {
+            entity_data: data,
+            acis_empty,
+        })
+    }
+    
+    /// Read BODY entity 
+    fn read_body(&mut self) -> Result<CadTemplate> {
+        let (data, acis_empty) = self.read_modeler_geometry()?;
+        Ok(CadTemplate::Body {
+            entity_data: data,
+            acis_empty,
+        })
+    }
+    
+    /// Read 3DSOLID entity
+    fn read_solid3d(&mut self) -> Result<CadTemplate> {
+        let (data, acis_empty) = self.read_modeler_geometry()?;
+        
+        // R2007+: history handle
+        let history_handle = if self.version >= ACadVersion::AC1021 {
+            self.reader.read_handle_reference(data.handle).ok()
+        } else {
+            None
+        };
+        
+        Ok(CadTemplate::Solid3D {
+            entity_data: data,
+            acis_empty,
+            history_handle,
+        })
+    }
+    
+    /// Read a class-based entity. For most class entities we can only read the common
+    /// entity data and handles, but we at least register them as entities.
+    fn read_class_entity(&mut self, _dxf_name: &str) -> Result<Option<CadTemplate>> {
+        // Read the common entity header and handles for all class entities
+        // The entity-specific binary format is complex and version-dependent
+        // Entity data + handles are enough to track layer, color, linetype etc.
+        let mut data = self.read_entity_data()?;
+        self.read_entity_handles(&mut data)?;
+        self.queue_entity_handles(&data);
+        // Return None — entity exists but we can't parse specifics yet
+        Ok(None)
     }
 }

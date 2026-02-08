@@ -475,17 +475,296 @@ impl<R: Read + Seek> DwgHeaderReader<R> {
         // CECOLOR
         header.current_entity_color = self.reader.read_cmc_color()?;
         
-        // Read handle references at the end of header section
-        self.read_handles(&mut handles)?;
+        // HANDSEED - The next handle (read from main data stream)
+        let _handseed = self.reader.read_handle()?;
         
-        // TODO: Read more header variables...
+        // CLAYER (hard pointer)
+        handles.current_layer = Some(self.reader.read_handle()?);
+        // TEXTSTYLE (hard pointer)
+        handles.current_textstyle = Some(self.reader.read_handle()?);
+        // CELTYPE (hard pointer)
+        handles.current_linetype = Some(self.reader.read_handle()?);
         
-        Ok(handles)
-    }
-    
-    /// Read handle references from header
-    fn read_handles(&mut self, handles: &mut DwgHeaderHandles) -> Result<()> {
-        // Table control handles
+        // R2007+: CMATERIAL (hard pointer)
+        if self.r2007_plus() {
+            let _cmaterial = self.reader.read_handle()?;
+        }
+        
+        // DIMSTYLE (hard pointer)
+        handles.current_dimstyle = Some(self.reader.read_handle()?);
+        // CMLSTYLE (hard pointer)
+        handles.current_multiline_style = Some(self.reader.read_handle()?);
+        
+        // R2000+: PSVPSCALE
+        if self.version >= ACadVersion::AC1015 {
+            let _psvpscale = self.reader.read_bitdouble()?;
+        }
+        
+        // === Paper Space ===
+        // 3BD: INSBASE (PSPACE)
+        let _insbase_ps = self.reader.read_3bitdouble()?;
+        // 3BD: EXTMIN (PSPACE)
+        let _extmin_ps = self.reader.read_3bitdouble()?;
+        // 3BD: EXTMAX (PSPACE)
+        let _extmax_ps = self.reader.read_3bitdouble()?;
+        // 2RD: LIMMIN (PSPACE)
+        let _limmin_ps = self.reader.read_2raw_double()?;
+        // 2RD: LIMMAX (PSPACE)
+        let _limmax_ps = self.reader.read_2raw_double()?;
+        // BD: ELEVATION (PSPACE)
+        let _elevation_ps = self.reader.read_bitdouble()?;
+        // 3BD: UCSORG (PSPACE)
+        let _ucsorg_ps = self.reader.read_3bitdouble()?;
+        // 3BD: UCSXDIR (PSPACE)
+        let _ucsxdir_ps = self.reader.read_3bitdouble()?;
+        // 3BD: UCSYDIR (PSPACE)
+        let _ucsydir_ps = self.reader.read_3bitdouble()?;
+        // H: UCSNAME (PSPACE) (hard pointer)
+        handles.pucs_origin = Some(self.reader.read_handle()?);
+        
+        // R2000+: Paper space UCS ortho
+        if self.version >= ACadVersion::AC1015 {
+            // H: PUCSORTHOREF (hard pointer)
+            handles.pucs_ortho_ref = Some(self.reader.read_handle()?);
+            // BS: PUCSORTHOVIEW
+            let _pucsorthoview = self.reader.read_bitshort()?;
+            // H: PUCSBASE (hard pointer)
+            let _pucsbase = self.reader.read_handle()?;
+            // 3BD: PUCSORGTOP
+            let _pucsorgtop = self.reader.read_3bitdouble()?;
+            // 3BD: PUCSORGBOTTOM
+            let _pucsorgbottom = self.reader.read_3bitdouble()?;
+            // 3BD: PUCSORGLEFT
+            let _pucsorgleft = self.reader.read_3bitdouble()?;
+            // 3BD: PUCSORGRIGHT
+            let _pucsorgright = self.reader.read_3bitdouble()?;
+            // 3BD: PUCSORGFRONT
+            let _pucsorgfront = self.reader.read_3bitdouble()?;
+            // 3BD: PUCSORGBACK
+            let _pucsorgback = self.reader.read_3bitdouble()?;
+        }
+        
+        // === Model Space ===
+        // 3BD: INSBASE (MSPACE)
+        let _insbase_ms = self.reader.read_3bitdouble()?;
+        // 3BD: EXTMIN (MSPACE)
+        let _extmin_ms = self.reader.read_3bitdouble()?;
+        // 3BD: EXTMAX (MSPACE)
+        let _extmax_ms = self.reader.read_3bitdouble()?;
+        // 2RD: LIMMIN (MSPACE)
+        let _limmin_ms = self.reader.read_2raw_double()?;
+        // 2RD: LIMMAX (MSPACE)
+        let _limmax_ms = self.reader.read_2raw_double()?;
+        // BD: ELEVATION (MSPACE)
+        let _elevation_ms = self.reader.read_bitdouble()?;
+        // 3BD: UCSORG (MSPACE)
+        let _ucsorg_ms = self.reader.read_3bitdouble()?;
+        // 3BD: UCSXDIR (MSPACE)
+        let _ucsxdir_ms = self.reader.read_3bitdouble()?;
+        // 3BD: UCSYDIR (MSPACE)
+        let _ucsydir_ms = self.reader.read_3bitdouble()?;
+        // H: UCSNAME (MSPACE) (hard pointer)
+        handles.ucs_origin = Some(self.reader.read_handle()?);
+        
+        // R2000+: Model space UCS ortho
+        if self.version >= ACadVersion::AC1015 {
+            // H: UCSORTHOREF (hard pointer)
+            handles.ucs_ortho_ref = Some(self.reader.read_handle()?);
+            // BS: UCSORTHOVIEW
+            let _ucsorthoview = self.reader.read_bitshort()?;
+            // H: UCSBASE (hard pointer)
+            let _ucsbase = self.reader.read_handle()?;
+            // 3BD: UCSORGTOP
+            let _ucsorgtop = self.reader.read_3bitdouble()?;
+            // 3BD: UCSORGBOTTOM
+            let _ucsorgbottom = self.reader.read_3bitdouble()?;
+            // 3BD: UCSORGLEFT
+            let _ucsorgleft = self.reader.read_3bitdouble()?;
+            // 3BD: UCSORGRIGHT
+            let _ucsorgright = self.reader.read_3bitdouble()?;
+            // 3BD: UCSORGFRONT
+            let _ucsorgfront = self.reader.read_3bitdouble()?;
+            // 3BD: UCSORGBACK
+            let _ucsorgback = self.reader.read_3bitdouble()?;
+            
+            // TV: DIMPOST
+            let _dimpost = self.reader.read_variable_text(self.version)?;
+            // TV: DIMAPOST
+            let _dimapost = self.reader.read_variable_text(self.version)?;
+        }
+        
+        // === R13-R14 Only: Dimension variables ===
+        if self.r13_14_only() {
+            let _dimtol = self.reader.read_bit()?;
+            let _dimlim = self.reader.read_bit()?;
+            let _dimtih = self.reader.read_bit()?;
+            let _dimtoh = self.reader.read_bit()?;
+            let _dimse1 = self.reader.read_bit()?;
+            let _dimse2 = self.reader.read_bit()?;
+            let _dimalt = self.reader.read_bit()?;
+            let _dimtofl = self.reader.read_bit()?;
+            let _dimsah = self.reader.read_bit()?;
+            let _dimtix = self.reader.read_bit()?;
+            let _dimsoxd = self.reader.read_bit()?;
+            let _dimaltd = self.reader.read_raw_char()?;
+            let _dimzin = self.reader.read_raw_char()?;
+            let _dimsd1 = self.reader.read_bit()?;
+            let _dimsd2 = self.reader.read_bit()?;
+            let _dimtolj = self.reader.read_raw_char()?;
+            let _dimjust = self.reader.read_raw_char()?;
+            let _dimfit = self.reader.read_raw_char()?;
+            let _dimupt = self.reader.read_bit()?;
+            let _dimtzin = self.reader.read_raw_char()?;
+            let _dimaltz = self.reader.read_raw_char()?;
+            let _dimalttz = self.reader.read_raw_char()?;
+            let _dimtad = self.reader.read_raw_char()?;
+            let _dimunit = self.reader.read_bitshort()?;
+            let _dimaunit = self.reader.read_bitshort()?;
+            let _dimdec = self.reader.read_bitshort()?;
+            let _dimtdec = self.reader.read_bitshort()?;
+            let _dimaltu = self.reader.read_bitshort()?;
+            let _dimalttd = self.reader.read_bitshort()?;
+            // H: DIMTXSTY (hard pointer)
+            handles.dim_textstyle = Some(self.reader.read_handle()?);
+        }
+        
+        // === Common: Dimension scale/size doubles ===
+        let _dimscale = self.reader.read_bitdouble()?;
+        let _dimasz = self.reader.read_bitdouble()?;
+        let _dimexo = self.reader.read_bitdouble()?;
+        let _dimdli = self.reader.read_bitdouble()?;
+        let _dimexe = self.reader.read_bitdouble()?;
+        let _dimrnd = self.reader.read_bitdouble()?;
+        let _dimdle = self.reader.read_bitdouble()?;
+        let _dimtp = self.reader.read_bitdouble()?;
+        let _dimtm = self.reader.read_bitdouble()?;
+        
+        // R2007+: Dimension extras
+        if self.r2007_plus() {
+            let _dimfxl = self.reader.read_bitdouble()?;
+            let _dimjogang = self.reader.read_bitdouble()?;
+            let _dimtfill = self.reader.read_bitshort()?;
+            let _dimtfillclr = self.reader.read_cmc_color()?;
+        }
+        
+        // R2000+: Dimension boolean flags
+        if self.version >= ACadVersion::AC1015 {
+            let _dimtol = self.reader.read_bit()?;
+            let _dimlim = self.reader.read_bit()?;
+            let _dimtih = self.reader.read_bit()?;
+            let _dimtoh = self.reader.read_bit()?;
+            let _dimse1 = self.reader.read_bit()?;
+            let _dimse2 = self.reader.read_bit()?;
+            let _dimtad = self.reader.read_bitshort()?;
+            let _dimzin = self.reader.read_bitshort()?;
+            let _dimazin = self.reader.read_bitshort()?;
+        }
+        
+        // R2007+: DIMARCSYM
+        if self.r2007_plus() {
+            let _dimarcsym = self.reader.read_bitshort()?;
+        }
+        
+        // Common: Dimension text/size doubles
+        let _dimtxt = self.reader.read_bitdouble()?;
+        let _dimcen = self.reader.read_bitdouble()?;
+        let _dimtsz = self.reader.read_bitdouble()?;
+        let _dimaltf = self.reader.read_bitdouble()?;
+        let _dimlfac = self.reader.read_bitdouble()?;
+        let _dimtvp = self.reader.read_bitdouble()?;
+        let _dimtfac = self.reader.read_bitdouble()?;
+        let _dimgap = self.reader.read_bitdouble()?;
+        
+        // R13-R14 Only: Dimension strings
+        if self.r13_14_only() {
+            let _dimpost = self.reader.read_variable_text(self.version)?;
+            let _dimapost = self.reader.read_variable_text(self.version)?;
+            let _dimblk = self.reader.read_variable_text(self.version)?;
+            let _dimblk1 = self.reader.read_variable_text(self.version)?;
+            let _dimblk2 = self.reader.read_variable_text(self.version)?;
+        }
+        
+        // R2000+: More dimension settings
+        if self.version >= ACadVersion::AC1015 {
+            let _dimaltrnd = self.reader.read_bitdouble()?;
+            let _dimalt = self.reader.read_bit()?;
+            let _dimaltd = self.reader.read_bitshort()?;
+            let _dimtofl = self.reader.read_bit()?;
+            let _dimsah = self.reader.read_bit()?;
+            let _dimtix = self.reader.read_bit()?;
+            let _dimsoxd = self.reader.read_bit()?;
+        }
+        
+        // Common: Dimension colors
+        let _dimclrd = self.reader.read_cmc_color()?;
+        let _dimclre = self.reader.read_cmc_color()?;
+        let _dimclrt = self.reader.read_cmc_color()?;
+        
+        // R2000+: Dimension format settings
+        if self.version >= ACadVersion::AC1015 {
+            let _dimadec = self.reader.read_bitshort()?;
+            let _dimdec = self.reader.read_bitshort()?;
+            let _dimtdec = self.reader.read_bitshort()?;
+            let _dimaltu = self.reader.read_bitshort()?;
+            let _dimalttd = self.reader.read_bitshort()?;
+            let _dimaunit = self.reader.read_bitshort()?;
+            let _dimfrac = self.reader.read_bitshort()?;
+            let _dimlunit = self.reader.read_bitshort()?;
+            let _dimdsep = self.reader.read_bitshort()?;
+            let _dimtmove = self.reader.read_bitshort()?;
+            let _dimjust = self.reader.read_bitshort()?;
+            let _dimsd1 = self.reader.read_bit()?;
+            let _dimsd2 = self.reader.read_bit()?;
+            let _dimtolj = self.reader.read_bitshort()?;
+            let _dimtzin = self.reader.read_bitshort()?;
+            let _dimaltz = self.reader.read_bitshort()?;
+            let _dimalttz = self.reader.read_bitshort()?;
+            let _dimupt = self.reader.read_bit()?;
+            let _dimatfit = self.reader.read_bitshort()?;
+        }
+        
+        // R2007+: DIMFXLON
+        if self.r2007_plus() {
+            let _dimfxlon = self.reader.read_bit()?;
+        }
+        
+        // R2010+: Extra dimension variables
+        if self.r2010_plus() {
+            let _dimtxtdirection = self.reader.read_bit()?;
+            let _dimaltmzf = self.reader.read_bitdouble()?;
+            let _dimaltmzs = self.reader.read_variable_text(self.version)?;
+            let _dimmzf = self.reader.read_bitdouble()?;
+            let _dimmzs = self.reader.read_variable_text(self.version)?;
+        }
+        
+        // R2000+: Dimension handle references
+        if self.version >= ACadVersion::AC1015 {
+            // H: DIMTXSTY (hard pointer)
+            handles.dim_textstyle = Some(self.reader.read_handle()?);
+            // H: DIMLDRBLK (hard pointer)
+            handles.dim_leader_arrow = Some(self.reader.read_handle()?);
+            // H: DIMBLK (hard pointer)
+            let _dimblk = self.reader.read_handle()?;
+            // H: DIMBLK1 (hard pointer)
+            handles.dim_arrow1 = Some(self.reader.read_handle()?);
+            // H: DIMBLK2 (hard pointer)
+            handles.dim_arrow2 = Some(self.reader.read_handle()?);
+        }
+        
+        // R2007+: Dimension linetype handles
+        if self.r2007_plus() {
+            handles.dim_linetype1 = Some(self.reader.read_handle()?);
+            let _dimltex1 = self.reader.read_handle()?;
+            handles.dim_linetype2 = Some(self.reader.read_handle()?);
+        }
+        
+        // R2000+: Dimension line weights
+        if self.version >= ACadVersion::AC1015 {
+            let _dimlwd = self.reader.read_bitshort()?;
+            let _dimlwe = self.reader.read_bitshort()?;
+        }
+        
+        // === Table control object handles ===
         handles.block_control = Some(self.reader.read_handle()?);
         handles.layer_control = Some(self.reader.read_handle()?);
         handles.style_control = Some(self.reader.read_handle()?);
@@ -501,44 +780,109 @@ impl<R: Read + Seek> DwgHeaderReader<R> {
             handles.vp_entity_header_control = Some(self.reader.read_handle()?);
         }
         
-        // Named objects dictionary
+        // Common: Dictionary handles
+        handles.group_dict = Some(self.reader.read_handle()?);
+        handles.mline_style_dict = Some(self.reader.read_handle()?);
         handles.named_objects_dict = Some(self.reader.read_handle()?);
         
-        // R13-R14: MLINESTYLE
-        if self.r13_14_only() {
-            handles.mline_style_dict = Some(self.reader.read_handle()?);
-        }
-        
-        // R2000+: More handles
+        // R2000+: Additional settings and dictionary handles
         if self.version >= ACadVersion::AC1015 {
-            handles.group_dict = Some(self.reader.read_handle()?);
-            handles.mline_style_dict = Some(self.reader.read_handle()?);
-            handles.named_objects_dict = Some(self.reader.read_handle()?); // Repeat?
+            // BS: TSTACKALIGN
+            let _tstackalign = self.reader.read_bitshort()?;
+            // BS: TSTACKSIZE
+            let _tstacksize = self.reader.read_bitshort()?;
+            // TV: HYPERLINKBASE
+            let _hyperlinkbase = self.reader.read_variable_text(self.version)?;
+            // TV: STYLESHEET
+            let _stylesheet = self.reader.read_variable_text(self.version)?;
+            
+            // H: DICTIONARY (LAYOUTS) (hard pointer)
+            handles.layout_dict = Some(self.reader.read_handle()?);
+            // H: DICTIONARY (PLOTSETTINGS) (hard pointer)
+            let _plotsettings_dict = self.reader.read_handle()?;
+            // H: DICTIONARY (PLOTSTYLES) (hard pointer)
+            handles.plotstyle_dict = Some(self.reader.read_handle()?);
         }
         
-        // Block records
+        // R2004+: Material and color dictionaries
+        if self.r2004_plus() {
+            handles.material_dict = Some(self.reader.read_handle()?);
+            handles.color_dict = Some(self.reader.read_handle()?);
+        }
+        
+        // R2007+: Visual style dictionary
+        if self.r2007_plus() {
+            handles.visualstyle_dict = Some(self.reader.read_handle()?);
+            
+            // R2013+: Unknown handle (overrides visualstyle)
+            if self.r2013_plus() {
+                handles.visualstyle_dict = Some(self.reader.read_handle()?);
+            }
+        }
+        
+        // R2000+: Additional flags and handles
+        if self.version >= ACadVersion::AC1015 {
+            // BL: Flags
+            let _flags = self.reader.read_bitlong()?;
+            // BS: INSUNITS
+            header.insertion_units = self.reader.read_bitshort()?;
+            // BS: CEPSNTYPE
+            let _cepsntype = self.reader.read_bitshort()?;
+            
+            if _cepsntype == 3 {
+                // H: CPSNID (hard pointer)
+                let _cpsnid = self.reader.read_handle()?;
+            }
+            
+            // TV: FINGERPRINTGUID
+            let _fingerprintguid = self.reader.read_variable_text(self.version)?;
+            // TV: VERSIONGUID
+            let _versionguid = self.reader.read_variable_text(self.version)?;
+        }
+        
+        // R2004+: Additional flags
+        if self.r2004_plus() {
+            // RC: SORTENTS
+            let _sortents = self.reader.read_raw_char()?;
+            // RC: INDEXCTL
+            let _indexctl = self.reader.read_raw_char()?;
+            // RC: HIDETEXT
+            let _hidetext = self.reader.read_raw_char()?;
+            // RC: XCLIPFRAME
+            let _xclipframe = self.reader.read_raw_char()?;
+            // RC: DIMASSOC
+            let _dimassoc = self.reader.read_raw_char()?;
+            // RC: HALOGAP
+            let _halogap = self.reader.read_raw_char()?;
+            // BS: OBSCUREDCOLOR
+            let _obscuredcolor = self.reader.read_bitshort()?;
+            // BS: INTERSECTIONCOLOR
+            let _intersectioncolor = self.reader.read_bitshort()?;
+            // RC: OBSCUREDLTYPE
+            let _obscuredltype = self.reader.read_raw_char()?;
+            // RC: INTERSECTIONDISPLAY
+            let _intersectiondisplay = self.reader.read_raw_char()?;
+            // TV: PROJECTNAME
+            let _projectname = self.reader.read_variable_text(self.version)?;
+        }
+        
+        // Common: Block record handles for paper/model space
         handles.paper_space = Some(self.reader.read_handle()?);
         handles.model_space = Some(self.reader.read_handle()?);
         
-        // Standard linetypes
+        // Standard linetype handles
         handles.bylayer_linetype = Some(self.reader.read_handle()?);
         handles.byblock_linetype = Some(self.reader.read_handle()?);
         handles.continuous_linetype = Some(self.reader.read_handle()?);
         
-        // R2007+: Additional dictionaries
+        // R2007+: Additional handles
         if self.r2007_plus() {
-            handles.visualstyle_dict = Some(self.reader.read_handle()?);
+            let _unknown_b1 = self.reader.read_bit()?;
+            let _unknown_bl1 = self.reader.read_bitlong()?;
+            let _unknown_bl2 = self.reader.read_bitlong()?;
+            let _unknown_bd1 = self.reader.read_bitdouble()?;
         }
         
-        // R2000+: Current refs
-        if self.version >= ACadVersion::AC1015 {
-            handles.current_layer = Some(self.reader.read_handle()?);
-            handles.current_textstyle = Some(self.reader.read_handle()?);
-            handles.current_linetype = Some(self.reader.read_handle()?);
-            handles.current_dimstyle = Some(self.reader.read_handle()?);
-            handles.current_multiline_style = Some(self.reader.read_handle()?);
-        }
-        
-        Ok(())
+        Ok(handles)
     }
 }

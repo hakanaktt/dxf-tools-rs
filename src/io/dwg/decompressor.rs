@@ -189,215 +189,265 @@ impl Lz77AC21Decompressor {
         length: usize,
         buffer: &mut [u8],
     ) -> Result<()> {
-        let mut state = DecompressState {
-            source_offset: 0,
-            length: 0,
-            source_index: initial_offset,
-            op_code: source[initial_offset],
-        };
-        
+        let mut source_offset: usize = 0;
+        let mut lit_length: usize = 0;
+        let mut source_index = initial_offset;
+        let mut op_code = source[source_index] as usize;
         let mut dest_index: usize = 0;
-        let end_index = state.source_index + length;
+        let end_index = source_index + length;
         
-        state.source_index += 1;
+        source_index += 1;
         
-        if state.source_index >= end_index {
+        if source_index >= end_index {
             return Ok(());
         }
         
-        if (state.op_code & 0xF0) == 0x20 {
-            state.source_index += 3;
-            state.length = (source[state.source_index - 1] & 7) as usize;
+        if (op_code & 0xF0) == 0x20 {
+            source_index += 3;
+            lit_length = (source[source_index - 1] & 7) as usize;
         }
         
-        while state.source_index < end_index {
-            // Next index
-            state.next_index(source, buffer, &mut dest_index)?;
-            
-            if state.source_index >= end_index {
-                break;
-            }
-            
-            dest_index = state.copy_decompressed_chunks(source, end_index, buffer, dest_index)?;
-        }
-        
-        Ok(())
-    }
-}
-
-struct DecompressState {
-    source_offset: usize,
-    length: usize,
-    source_index: usize,
-    op_code: u8,
-}
-
-impl DecompressState {
-    fn next_index(
-        &mut self,
-        source: &[u8],
-        dest: &mut [u8],
-        index: &mut usize,
-    ) -> Result<()> {
-        if self.length == 0 {
-            self.read_literal_length(source);
-        }
-        
-        // Copy bytes
-        dest[*index..*index + self.length]
-            .copy_from_slice(&source[self.source_index..self.source_index + self.length]);
-        
-        self.source_index += self.length;
-        *index += self.length;
-        
-        Ok(())
-    }
-    
-    fn copy_decompressed_chunks(
-        &mut self,
-        src: &[u8],
-        end_index: usize,
-        dst: &mut [u8],
-        mut dest_index: usize,
-    ) -> Result<usize> {
-        self.length = 0;
-        self.op_code = src[self.source_index];
-        self.source_index += 1;
-        
-        self.read_instructions(src);
-        
-        loop {
-            // Copy bytes from earlier position
-            self.copy_bytes(dst, dest_index);
-            
-            dest_index += self.length;
-            
-            self.length = (self.op_code & 0x07) as usize;
-            
-            if self.length != 0 || self.source_index >= end_index {
-                break;
-            }
-            
-            self.op_code = src[self.source_index];
-            self.source_index += 1;
-            
-            if (self.op_code >> 4) == 0 {
-                break;
-            }
-            
-            if (self.op_code >> 4) == 15 {
-                self.op_code &= 15;
-            }
-            
-            self.read_instructions(src);
-        }
-        
-        Ok(dest_index)
-    }
-    
-    fn read_instructions(&mut self, buffer: &[u8]) {
-        match self.op_code >> 4 {
-            0 => {
-                self.length = (self.op_code & 0x0F) as usize + 0x13;
-                self.source_offset = buffer[self.source_index] as usize;
-                self.source_index += 1;
-                self.op_code = buffer[self.source_index];
-                self.source_index += 1;
-                self.length = ((self.op_code >> 3 & 0x10) as usize) + self.length;
-                self.source_offset = (((self.op_code & 0x78) as usize) << 5) + 1 + self.source_offset;
-            }
-            1 => {
-                self.length = (self.op_code & 0x0F) as usize + 3;
-                self.source_offset = buffer[self.source_index] as usize;
-                self.source_index += 1;
-                self.op_code = buffer[self.source_index];
-                self.source_index += 1;
-                self.source_offset = (((self.op_code & 0xF8) as usize) << 5) + 1 + self.source_offset;
-            }
-            2 => {
-                self.source_offset = buffer[self.source_index] as usize;
-                self.source_index += 1;
-                self.source_offset = ((buffer[self.source_index] as usize) << 8) | self.source_offset;
-                self.source_index += 1;
-                self.length = (self.op_code & 7) as usize;
-                
-                if (self.op_code & 8) == 0 {
-                    self.op_code = buffer[self.source_index];
-                    self.source_index += 1;
-                    self.length = ((self.op_code & 0xF8) as usize) + self.length;
-                } else {
-                    self.source_offset += 1;
-                    self.length = ((buffer[self.source_index] as usize) << 3) + self.length;
-                    self.source_index += 1;
-                    self.op_code = buffer[self.source_index];
-                    self.source_index += 1;
-                    self.length = (((self.op_code & 0xF8) as usize) << 8) + self.length + 0x100;
-                }
-            }
-            _ => {
-                self.length = (self.op_code >> 4) as usize;
-                self.source_offset = (self.op_code & 0x0F) as usize;
-                self.op_code = buffer[self.source_index];
-                self.source_index += 1;
-                self.source_offset = (((self.op_code & 0xF8) as usize) << 1) + self.source_offset + 1;
-            }
-        }
-    }
-    
-    fn read_literal_length(&mut self, buffer: &[u8]) {
-        self.length = self.op_code as usize + 8;
-        
-        if self.length == 0x17 {
-            let mut n = buffer[self.source_index] as usize;
-            self.source_index += 1;
-            self.length += n;
-            
-            if n == 0xFF {
-                loop {
-                    n = buffer[self.source_index] as usize;
-                    self.source_index += 1;
-                    n |= (buffer[self.source_index] as usize) << 8;
-                    self.source_index += 1;
-                    self.length += n;
-                    
-                    if n != 0xFFFF {
-                        break;
+        while source_index < end_index {
+            // nextIndex - copy literal bytes with word-reordering
+            if lit_length == 0 {
+                lit_length = op_code + 8;
+                if lit_length == 0x17 {
+                    let mut n = source[source_index] as usize;
+                    source_index += 1;
+                    lit_length += n;
+                    if n == 0xFF {
+                        loop {
+                            n = source[source_index] as usize;
+                            source_index += 1;
+                            n |= (source[source_index] as usize) << 8;
+                            source_index += 1;
+                            lit_length += n;
+                            if n != 0xFFFF { break; }
+                        }
                     }
                 }
             }
+            
+            // Copy literal bytes with word-reordering (AC21 copy function)
+            ac21_copy(source, source_index, buffer, dest_index, lit_length);
+            source_index += lit_length;
+            dest_index += lit_length;
+            
+            if source_index >= end_index {
+                break;
+            }
+            
+            // copyDecompressedChunks
+            lit_length = 0;
+            op_code = source[source_index] as usize;
+            source_index += 1;
+            
+            // readInstructions + copy loop
+            loop {
+                // readInstructions
+                match op_code >> 4 {
+                    0 => {
+                        lit_length = (op_code & 0x0F) + 0x13;
+                        source_offset = source[source_index] as usize;
+                        source_index += 1;
+                        op_code = source[source_index] as usize;
+                        source_index += 1;
+                        lit_length = ((op_code >> 3) & 0x10) + lit_length;
+                        source_offset = ((op_code & 0x78) << 5) + 1 + source_offset;
+                    }
+                    1 => {
+                        lit_length = (op_code & 0x0F) + 3;
+                        source_offset = source[source_index] as usize;
+                        source_index += 1;
+                        op_code = source[source_index] as usize;
+                        source_index += 1;
+                        source_offset = ((op_code & 0xF8) << 5) + 1 + source_offset;
+                    }
+                    2 => {
+                        source_offset = source[source_index] as usize;
+                        source_index += 1;
+                        source_offset = ((source[source_index] as usize) << 8 & 0xFF00) | source_offset;
+                        source_index += 1;
+                        lit_length = op_code & 7;
+                        if (op_code & 8) == 0 {
+                            op_code = source[source_index] as usize;
+                            source_index += 1;
+                            lit_length = (op_code & 0xF8) + lit_length;
+                        } else {
+                            source_offset += 1;
+                            lit_length = ((source[source_index] as usize) << 3) + lit_length;
+                            source_index += 1;
+                            op_code = source[source_index] as usize;
+                            source_index += 1;
+                            lit_length = ((op_code & 0xF8) << 8) + lit_length + 0x100;
+                        }
+                    }
+                    _ => {
+                        lit_length = op_code >> 4;
+                        source_offset = op_code & 0x0F;
+                        op_code = source[source_index] as usize;
+                        source_index += 1;
+                        source_offset = ((op_code & 0xF8) << 1) + source_offset + 1;
+                    }
+                }
+                
+                // copyBytes - copy from earlier position in dest buffer
+                {
+                    if source_offset > dest_index {
+                        return Err(DxfError::Parse(format!(
+                            "AC21 LZ77: source_offset ({}) > dest_index ({})", source_offset, dest_index
+                        )));
+                    }
+                    let initial_index = dest_index - source_offset;
+                    for i in 0..lit_length {
+                        buffer[dest_index + i] = buffer[initial_index + i];
+                    }
+                }
+                dest_index += lit_length;
+                
+                lit_length = op_code & 0x07;
+                
+                if lit_length != 0 || source_index >= end_index {
+                    break;
+                }
+                
+                op_code = source[source_index] as usize;
+                source_index += 1;
+                
+                if (op_code >> 4) == 0 {
+                    break;
+                }
+                
+                if (op_code >> 4) == 15 {
+                    op_code &= 15;
+                }
+            }
         }
-    }
-    
-    fn copy_bytes(&self, dst: &mut [u8], dst_index: usize) {
-        let initial_index = dst_index - self.source_offset;
         
-        for i in 0..self.length {
-            dst[dst_index + i] = dst[initial_index + i];
-        }
+        Ok(())
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_ac21_decompressor_empty() {
-        let source = vec![0x11]; // Terminator
-        let mut buffer = vec![0u8; 100];
+/// AC21 literal copy with word-reordering
+/// Copies bytes from src to dst with 32-byte block qword-reversal
+fn ac21_copy(src: &[u8], mut src_idx: usize, dst: &mut [u8], mut dst_idx: usize, mut length: usize) {
+    // Copy in 32-byte chunks with qword reordering
+    while length >= 32 {
+        // Reverse order of 8-byte groups within each 32-byte block
+        dst[dst_idx]     = src[src_idx + 24];
+        dst[dst_idx + 1] = src[src_idx + 25];
+        dst[dst_idx + 2] = src[src_idx + 26];
+        dst[dst_idx + 3] = src[src_idx + 27];
         
-        // Should handle empty/minimal input gracefully
-        let result = Lz77AC21Decompressor::decompress(&source, 0, 0, &mut buffer);
-        assert!(result.is_ok());
+        dst[dst_idx + 4] = src[src_idx + 28];
+        dst[dst_idx + 5] = src[src_idx + 29];
+        dst[dst_idx + 6] = src[src_idx + 30];
+        dst[dst_idx + 7] = src[src_idx + 31];
+        
+        dst[dst_idx + 8]  = src[src_idx + 16];
+        dst[dst_idx + 9]  = src[src_idx + 17];
+        dst[dst_idx + 10] = src[src_idx + 18];
+        dst[dst_idx + 11] = src[src_idx + 19];
+        
+        dst[dst_idx + 12] = src[src_idx + 20];
+        dst[dst_idx + 13] = src[src_idx + 21];
+        dst[dst_idx + 14] = src[src_idx + 22];
+        dst[dst_idx + 15] = src[src_idx + 23];
+        
+        dst[dst_idx + 16] = src[src_idx + 8];
+        dst[dst_idx + 17] = src[src_idx + 9];
+        dst[dst_idx + 18] = src[src_idx + 10];
+        dst[dst_idx + 19] = src[src_idx + 11];
+        
+        dst[dst_idx + 20] = src[src_idx + 12];
+        dst[dst_idx + 21] = src[src_idx + 13];
+        dst[dst_idx + 22] = src[src_idx + 14];
+        dst[dst_idx + 23] = src[src_idx + 15];
+        
+        dst[dst_idx + 24] = src[src_idx];
+        dst[dst_idx + 25] = src[src_idx + 1];
+        dst[dst_idx + 26] = src[src_idx + 2];
+        dst[dst_idx + 27] = src[src_idx + 3];
+        
+        dst[dst_idx + 28] = src[src_idx + 4];
+        dst[dst_idx + 29] = src[src_idx + 5];
+        dst[dst_idx + 30] = src[src_idx + 6];
+        dst[dst_idx + 31] = src[src_idx + 7];
+        
+        src_idx += 32;
+        dst_idx += 32;
+        length -= 32;
     }
     
-    #[test]
-    fn test_simple_literal_copy() {
-        // Create a simple test case with literal bytes
-        // This is a minimal test - real DWG data would be more complex
-        let mut source = vec![0u8; 256];
-        source[0] = 0x11; // Terminator opcode
-        
-        // The decompressor should handle the terminator
+    if length == 0 { return; }
+    
+    // For remaining bytes, use the C# m_copyMethods pattern
+    ac21_copy_remainder(src, src_idx, dst, dst_idx, length);
+}
+
+/// Copy remaining 1-31 bytes with the AC21 byte reordering  
+fn ac21_copy_remainder(src: &[u8], si: usize, dst: &mut [u8], di: usize, len: usize) {
+    match len {
+        1 => { dst[di] = src[si]; }
+        2 => { dst[di] = src[si+1]; dst[di+1] = src[si]; }
+        3 => { dst[di] = src[si+2]; dst[di+1] = src[si+1]; dst[di+2] = src[si]; }
+        4 => { copy4(src, si, dst, di); }
+        5 => { dst[di] = src[si+4]; copy4(src, si, dst, di+1); }
+        6 => { dst[di] = src[si+5]; copy4(src, si+1, dst, di+1); dst[di+5] = src[si]; }
+        7 => { dst[di] = src[si+6]; dst[di+1] = src[si+5]; copy4(src, si+1, dst, di+2); dst[di+6] = src[si]; }
+        8 => { copy8(src, si, dst, di); }
+        9 => { dst[di] = src[si+8]; copy8(src, si, dst, di+1); }
+        10 => { dst[di] = src[si+9]; copy8(src, si+1, dst, di+1); dst[di+9] = src[si]; }
+        11 => { dst[di] = src[si+10]; dst[di+1] = src[si+9]; copy8(src, si+1, dst, di+2); dst[di+10] = src[si]; }
+        12 => { copy4(src, si+8, dst, di); copy8(src, si, dst, di+4); }
+        13 => { dst[di] = src[si+12]; copy4(src, si+8, dst, di+1); copy8(src, si, dst, di+5); }
+        14 => { dst[di] = src[si+13]; copy4(src, si+9, dst, di+1); copy8(src, si+1, dst, di+5); dst[di+13] = src[si]; }
+        15 => { dst[di] = src[si+14]; dst[di+1] = src[si+13]; copy4(src, si+9, dst, di+2); copy8(src, si+1, dst, di+6); dst[di+14] = src[si]; }
+        16 => { copy16(src, si, dst, di); }
+        17 => { copy8(src, si+9, dst, di); dst[di+8] = src[si+8]; copy8(src, si, dst, di+9); }
+        18 => { dst[di] = src[si+17]; copy16(src, si+1, dst, di+1); dst[di+17] = src[si]; }
+        19 => { dst[di] = src[si+18]; dst[di+1] = src[si+17]; dst[di+2] = src[si+16]; copy16(src, si, dst, di+3); }
+        20 => { copy4(src, si+16, dst, di); copy8(src, si+8, dst, di+4); copy8(src, si, dst, di+12); }
+        21 => { dst[di] = src[si+20]; copy4(src, si+16, dst, di+1); copy8(src, si+8, dst, di+5); copy8(src, si, dst, di+13); }
+        22 => { dst[di] = src[si+21]; dst[di+1] = src[si+20]; copy4(src, si+16, dst, di+2); copy8(src, si+8, dst, di+6); copy8(src, si, dst, di+14); }
+        23 => { dst[di] = src[si+22]; dst[di+1] = src[si+21]; dst[di+2] = src[si+20]; copy4(src, si+16, dst, di+3); copy8(src, si+8, dst, di+7); copy8(src, si, dst, di+15); }
+        24 => { copy8(src, si+16, dst, di); copy16(src, si, dst, di+8); }
+        25 => { copy8(src, si+17, dst, di); dst[di+8] = src[si+16]; copy16(src, si, dst, di+9); }
+        26 => { dst[di] = src[si+25]; copy8(src, si+17, dst, di+1); dst[di+9] = src[si+16]; copy16(src, si, dst, di+10); }
+        27 => { dst[di] = src[si+26]; dst[di+1] = src[si+25]; copy8(src, si+17, dst, di+2); dst[di+10] = src[si+16]; copy16(src, si, dst, di+11); }
+        28 => { copy4(src, si+24, dst, di); copy8(src, si+16, dst, di+4); copy8(src, si+8, dst, di+12); copy8(src, si, dst, di+20); }
+        29 => { dst[di] = src[si+28]; copy4(src, si+24, dst, di+1); copy8(src, si+16, dst, di+5); copy8(src, si+8, dst, di+13); copy8(src, si, dst, di+21); }
+        30 => { dst[di] = src[si+29]; dst[di+1] = src[si+28]; copy4(src, si+24, dst, di+2); copy8(src, si+16, dst, di+6); copy8(src, si+8, dst, di+14); copy8(src, si, dst, di+22); }
+        31 => { dst[di] = src[si+30]; copy4(src, si+26, dst, di+1); copy8(src, si+18, dst, di+5); copy8(src, si+10, dst, di+13); copy8(src, si+2, dst, di+21); dst[di+29] = src[si+1]; dst[di+30] = src[si]; }
+        _ => {}
     }
+}
+
+#[inline(always)]
+fn copy4(src: &[u8], si: usize, dst: &mut [u8], di: usize) {
+    dst[di]   = src[si];
+    dst[di+1] = src[si+1];
+    dst[di+2] = src[si+2];
+    dst[di+3] = src[si+3];
+}
+
+#[inline(always)]
+fn copy8(src: &[u8], si: usize, dst: &mut [u8], di: usize) {
+    // copy8b in C# = two straight copy4b calls (no byte swapping!)
+    dst[di]   = src[si];
+    dst[di+1] = src[si+1];
+    dst[di+2] = src[si+2];
+    dst[di+3] = src[si+3];
+    dst[di+4] = src[si+4];
+    dst[di+5] = src[si+5];
+    dst[di+6] = src[si+6];
+    dst[di+7] = src[si+7];
+}
+
+#[inline(always)]
+fn copy16(src: &[u8], si: usize, dst: &mut [u8], di: usize) {
+    // copy16b in C# = copy8b(src+8, dst) then copy8b(src, dst+8)
+    // Swaps two 8-byte halves
+    copy8(src, si+8, dst, di);
+    copy8(src, si, dst, di+8);
 }

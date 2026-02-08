@@ -30,6 +30,7 @@ use super::file_header::{
     CodePage, DwgFileHeaderAC15, DwgFileHeaderAC18, DwgFileHeaderAC21,
     DwgFileHeaderType,
 };
+use super::section::{DwgSectionDescriptor, DwgSectionLocatorRecord};
 
 /// Configuration options for DWG reading
 #[derive(Debug, Clone)]
@@ -163,16 +164,20 @@ impl<R: Read + Seek> DwgReader<R> {
         
         // Get maintenance version from file header
         let maintenance_version = header.maintenance_version;
-        let section_base = header.records.get(&3).map(|r| r.seeker).unwrap_or(0);
         
-        // Read all section data first, then drop section reader to release borrow
-        let (header_section_data, classes_section_data, handles_section_data, objects_section_data) = {
-            let mut section_reader = DwgSectionReaderAC15::new(&mut self.reader, header, version);
+        // For AC15, read the entire file into memory as objects are at file offsets
+        self.reader.seek(SeekFrom::Start(0))?;
+        let mut file_data = Vec::new();
+        self.reader.read_to_end(&mut file_data)?;
+        
+        // Read section data from the file
+        let (header_section_data, classes_section_data, handles_section_data) = {
+            let mut cursor = Cursor::new(&file_data);
+            let mut section_reader = DwgSectionReaderAC15::new(&mut cursor, header, version);
             let header_data = section_reader.read_section("HEADER")?.data;
             let classes_data = section_reader.read_section("CLASSES")?.data;
             let handles_data = section_reader.read_section("HANDLES")?.data;
-            let objects_data = section_reader.read_section("OBJECTS")?.data;
-            (header_data, classes_data, handles_data, objects_data)
+            (header_data, classes_data, handles_data)
         };
         
         // 1. Read header section
@@ -196,10 +201,14 @@ impl<R: Read + Seek> DwgReader<R> {
         let mut handle_reader = DwgHandleReader::new(handles_bit_reader, version);
         let handle_map = handle_reader.read()?;
         
-        // 4. Read objects section
-        let initial_handles = header_handles.get_handles();
+        // 4. Read objects from file offsets
+        // For AC15, use ALL handle map entries as initial handles since entity handles
+        // are not yet discovered through block records (handle reading in block records
+        // requires separate stream support for R2000)
+        let initial_handles: Vec<u64> = handle_map.keys().copied().collect();
         
-        let objects_cursor = Cursor::new(objects_section_data);
+        // Create a BitReader over the entire file data
+        let objects_cursor = Cursor::new(file_data);
         let objects_bit_reader = BitReader::new(objects_cursor, version);
         let mut object_reader = DwgObjectReader::new(
             objects_bit_reader,
@@ -208,7 +217,8 @@ impl<R: Read + Seek> DwgReader<R> {
             &classes,
             initial_handles,
         );
-        object_reader.set_section_base(section_base);
+        // For AC15, offsets in handle map are absolute file offsets
+        object_reader.set_section_base(0);
         
         let templates = object_reader.read()?;
         
@@ -327,9 +337,137 @@ impl<R: Read + Seek> DwgReader<R> {
     
     /// Read AC21 format (R2007+)
     fn read_ac21(&mut self, document: &mut CadDocument, header: &DwgFileHeaderAC21, version: ACadVersion) -> Result<()> {
-        // AC21 uses the same section structure as AC18, just with different compression
-        // Delegate to AC18 reading for now
-        self.read_ac18(document, &header.base, version)
+        use super::decompressor::Lz77AC21Decompressor;
+        use super::section::DwgSectionLocatorRecord;
+        use std::io::Cursor;
+        use super::stream_reader::BitReader;
+        use super::header_reader::DwgHeaderReader;
+        use super::classes_reader::DwgClassesReader;
+        use super::handle_reader::DwgHandleReader;
+        use super::object_reader::DwgObjectReader;
+        
+        let maintenance_version = header.base.base.maintenance_version;
+        
+        /// Read a section's decompressed data using AC21 format
+        fn read_section_ac21(
+            reader: &mut (impl Read + Seek),
+            header: &DwgFileHeaderAC21,
+            section_name: &str,
+        ) -> Option<Vec<u8>> {
+            let descriptor = header.base.descriptors.get(section_name)?;
+            
+            // Calculate total uncompressed size
+            let total_size: u64 = descriptor.local_sections.iter()
+                .map(|p| p.size)
+                .sum();
+            
+            let mut data = Vec::with_capacity(total_size as usize);
+            
+            for page in &descriptor.local_sections {
+                // Get page position from the records table
+                let page_record = header.base.base.records.get(&page.page_number)?;
+                
+                // Seek to page position (base 0x480 for AC21)
+                reader.seek(SeekFrom::Start(page_record.seeker as u64 + 0x480)).ok()?;
+                
+                let mut page_bytes = vec![0u8; page_record.size as usize];
+                reader.read_exact(&mut page_bytes).ok()?;
+                
+                // Check if page is Reed-Solomon encoded
+                if descriptor.encoding == Some(4) {
+                    let v = page.compressed_size + 7;
+                    let v1 = v & 0xFFFFFFF8u64;  // 32-bit mask like C#
+                    let aligned_page_size = ((v1 + 251 - 1) / 251) as usize;
+                    let mut decoded = vec![0u8; aligned_page_size * 251];
+                    reed_solomon_decoding(&page_bytes, &mut decoded, aligned_page_size, 251);
+                    page_bytes = decoded;
+                }
+                
+                // Decompress if compressed
+                if page.compressed_size != page.size {
+                    let mut decompressed = vec![0u8; page.size as usize];
+                    if Lz77AC21Decompressor::decompress(&page_bytes, 0, page.compressed_size as usize, &mut decompressed).is_ok() {
+                        page_bytes = decompressed;
+                    }
+                }
+                
+                data.extend_from_slice(&page_bytes[..page.size as usize]);
+            }
+            
+            Some(data)
+        }
+        
+        // Read section data
+        let header_data = read_section_ac21(&mut self.reader, header, "AcDb:Header");
+        let classes_data = read_section_ac21(&mut self.reader, header, "AcDb:Classes");
+        let handles_data = read_section_ac21(&mut self.reader, header, "AcDb:Handles");
+        let objects_data = read_section_ac21(&mut self.reader, header, "AcDb:AcDbObjects");
+        
+        // 1. Read header section
+        let header_handles_result = if let Some(data) = header_data {
+            let header_cursor = Cursor::new(data);
+            let header_bit_reader = BitReader::new(header_cursor, version);
+            let mut header_reader = DwgHeaderReader::new(header_bit_reader, version, maintenance_version);
+            header_reader.read(&mut document.header).ok()
+        } else {
+            None
+        };
+        
+        if let Some(ref header_handles) = header_handles_result {
+            Self::apply_header_handles_static(document, header_handles);
+        }
+        
+        // 2. Read classes section
+        let classes = if let Some(data) = classes_data {
+            let classes_cursor = Cursor::new(data);
+            let classes_bit_reader = BitReader::new(classes_cursor, version);
+            let mut classes_reader = DwgClassesReader::new(classes_bit_reader, version);
+            classes_reader.read().unwrap_or_default()
+        } else {
+            Default::default()
+        };
+        
+        // 3. Read handles section
+        let handle_map = if let Some(data) = handles_data {
+            let handles_cursor = Cursor::new(data);
+            let handles_bit_reader = BitReader::new(handles_cursor, version);
+            let mut handle_reader = DwgHandleReader::new(handles_bit_reader, version);
+            handle_reader.read().unwrap_or_default()
+        } else {
+            Default::default()
+        };
+        
+        // 4. Read objects section
+        if let Some(data) = objects_data {
+            let objects_cursor = Cursor::new(data);
+            let objects_bit_reader = BitReader::new(objects_cursor, version);
+            
+            // Use all handle map entries as initial handles
+            let initial_handles: Vec<u64> = if let Some(ref hh) = header_handles_result {
+                let h = hh.get_handles();
+                if h.len() < 50 {
+                    handle_map.keys().copied().collect()
+                } else {
+                    h
+                }
+            } else {
+                handle_map.keys().copied().collect()
+            };
+            
+            let mut object_reader = DwgObjectReader::new(
+                objects_bit_reader,
+                version,
+                handle_map,
+                &classes,
+                initial_handles,
+            );
+            
+            if let Ok(templates) = object_reader.read() {
+                let _ = Self::build_document_static(document, templates);
+            }
+        }
+        
+        Ok(())
     }
     
     /// Apply header handles to document (static version to avoid borrow conflicts)
@@ -565,7 +703,7 @@ impl<R: Read + Seek> DwgReader<R> {
                 self.read_file_header_ac21(version)?
             }
             ACadVersion::AC1024 | ACadVersion::AC1027 | ACadVersion::AC1032 => {
-                // 2010+ uses AC18 format
+                // R2010+ uses AC18-style file header (reverted from AC21 format)
                 self.read_file_header_ac18(version)?
             }
             _ => return Err(DxfError::UnsupportedVersion(format!("{:?}", version))),
@@ -697,21 +835,273 @@ impl<R: Read + Seek> DwgReader<R> {
     
     /// Read AC21 file header (2007+)
     fn read_file_header_ac21(&mut self, version: ACadVersion) -> Result<DwgFileHeaderType> {
-        // AC21 builds on AC18 format with additional compressed metadata
-        let ac18_header = match self.read_file_header_ac18(version)? {
-            DwgFileHeaderType::AC18(h) => h,
-            _ => return Err(DxfError::InvalidHeader("Expected AC18 base header".to_string())),
+        use super::decompressor::Lz77AC21Decompressor;
+        use super::section::Dwg21CompressedMetadata;
+        
+        let mut header = DwgFileHeaderAC18::new(version);
+        
+        // Read file metadata (same format at offset 0x06-0x80)
+        self.reader.seek(SeekFrom::Start(6))?;
+        let mut meta_buf = [0u8; 6];
+        self.reader.read_exact(&mut meta_buf)?;
+        header.base.maintenance_version = meta_buf[5] as i32;
+        
+        self.reader.seek(SeekFrom::Start(13))?;
+        let mut preview_addr_bytes = [0u8; 4];
+        self.reader.read_exact(&mut preview_addr_bytes)?;
+        header.base.preview_address = i32::from_le_bytes(preview_addr_bytes) as i64;
+        
+        let mut app_version = [0u8; 1];
+        self.reader.read_exact(&mut app_version)?;
+        header.app_release_version = app_version[0];
+        
+        let mut dwg_version = [0u8; 1];
+        self.reader.read_exact(&mut dwg_version)?;
+        header.dwg_version = dwg_version[0];
+        
+        let mut codepage_bytes = [0u8; 2];
+        self.reader.read_exact(&mut codepage_bytes)?;
+        header.base.code_page = CodePage::from_value(i16::from_le_bytes(codepage_bytes));
+        
+        // Read 0x400 bytes at position 0x80
+        self.reader.seek(SeekFrom::Start(0x80))?;
+        let mut compressed_data = [0u8; 0x400];
+        self.reader.read_exact(&mut compressed_data)?;
+        
+        // Reed-Solomon decode with factor=3, blockSize=239
+        let mut decoded_data = vec![0u8; 3 * 239]; // 717 bytes
+        reed_solomon_decoding(&compressed_data, &mut decoded_data, 3, 239);
+        
+        // Parse header from decoded data
+        // 0x00: CRC(8), 0x08: unknownKey(8), 0x10: compDataCRC(8), 
+        // 0x18: comprLen(4), 0x1C: length2(4)
+        let compr_len = i32::from_le_bytes([decoded_data[24], decoded_data[25], decoded_data[26], decoded_data[27]]);
+        
+        // Decompress to 0x110 bytes
+        let mut metadata_buf = vec![0u8; 0x110];
+        if compr_len < 0 {
+            // Not compressed - copy directly
+            let len = (-compr_len) as usize;
+            metadata_buf[..len].copy_from_slice(&decoded_data[32..32+len]);
+        } else {
+            Lz77AC21Decompressor::decompress(&decoded_data, 32, compr_len as usize, &mut metadata_buf)?;
+        }
+        
+        // Parse Dwg21CompressedMetadata from the 0x110 buffer
+        let read_u64 = |offset: usize| -> u64 {
+            u64::from_le_bytes([
+                metadata_buf[offset], metadata_buf[offset+1], metadata_buf[offset+2], metadata_buf[offset+3],
+                metadata_buf[offset+4], metadata_buf[offset+5], metadata_buf[offset+6], metadata_buf[offset+7],
+            ])
         };
         
-        let header = DwgFileHeaderAC21 {
-            base: ac18_header,
-            compressed_metadata: None,
+        let compressed_metadata = Dwg21CompressedMetadata {
+            header_size: read_u64(0x00),
+            file_size: read_u64(0x08),
+            pages_map_crc_compressed: read_u64(0x10),
+            pages_map_correction: read_u64(0x18),
+            pages_map_crc_seed: read_u64(0x20),
+            pages_map_2_offset: read_u64(0x28),
+            pages_map_2_id: read_u64(0x30),
+            pages_map_offset: read_u64(0x38),
+            pages_map_id: read_u64(0x40),
+            header_2_offset: read_u64(0x48),
+            pages_map_size_compressed: read_u64(0x50),
+            pages_map_size_uncompressed: read_u64(0x58),
+            pages_amount: read_u64(0x60),
+            pages_max_id: read_u64(0x68),
+            // 0x70, 0x78: unknown
+            sections_map_id: read_u64(0xC0),
+            sections_map_size_uncompressed: read_u64(0xC8),
+            sections_map_size_compressed: read_u64(0xB0),
+            sections_map_crc_uncompressed: read_u64(0xA8),
+            sections_map_crc_compressed: read_u64(0xD0),
+            sections_map_correction: read_u64(0xD8),
+            sections_map_crc_seed: read_u64(0xE0),
+            stream_version: read_u64(0xE8),
+            crc_seed: read_u64(0xF0),
+            crc_seed_encoded: read_u64(0xF8),
+            random_seed: read_u64(0x100),
+            header_crc_64: read_u64(0x108),
         };
         
-        // TODO: Read compressed metadata for AC21
-        // The AC21 format uses a different compression and encryption scheme
+        // Read page map using getPageBuffer equivalent
+        let page_map_data = self.get_page_buffer_ac21(
+            compressed_metadata.pages_map_offset,
+            compressed_metadata.pages_map_size_compressed,
+            compressed_metadata.pages_map_size_uncompressed,
+            compressed_metadata.pages_map_correction,
+            0xEF, // blockSize = 239
+        )?;
         
-        Ok(DwgFileHeaderType::AC21(header))
+        // Parse page map entries: pairs of (size: i64, id: i64)
+        let mut offset: i64 = 0;
+        let mut pos = 0usize;
+        while pos + 16 <= page_map_data.len() {
+            let size = i64::from_le_bytes([
+                page_map_data[pos], page_map_data[pos+1], page_map_data[pos+2], page_map_data[pos+3],
+                page_map_data[pos+4], page_map_data[pos+5], page_map_data[pos+6], page_map_data[pos+7],
+            ]);
+            let id = i64::from_le_bytes([
+                page_map_data[pos+8], page_map_data[pos+9], page_map_data[pos+10], page_map_data[pos+11],
+                page_map_data[pos+12], page_map_data[pos+13], page_map_data[pos+14], page_map_data[pos+15],
+            ]).abs();
+            
+            header.base.records.insert(
+                id as i32,
+                DwgSectionLocatorRecord::with_values(Some(id as i32), offset, size),
+            );
+            
+            offset += size;
+            pos += 16;
+        }
+        
+        // Read section map from the sections map page
+        let sections_map_id = compressed_metadata.sections_map_id as i32;
+        if let Some(sections_page) = header.base.records.get(&sections_map_id) {
+            let sections_page_seeker = sections_page.seeker;
+            
+            let section_map_data = self.get_page_buffer_ac21(
+                sections_page_seeker as u64,
+                compressed_metadata.sections_map_size_compressed,
+                compressed_metadata.sections_map_size_uncompressed,
+                compressed_metadata.sections_map_correction,
+                239,
+            )?;
+            
+            // Parse section descriptors
+            let mut spos = 0usize;
+            while spos + 0x40 <= section_map_data.len() {
+                let read_u64_at = |off: usize| -> u64 {
+                    u64::from_le_bytes([
+                        section_map_data[off], section_map_data[off+1], section_map_data[off+2], section_map_data[off+3],
+                        section_map_data[off+4], section_map_data[off+5], section_map_data[off+6], section_map_data[off+7],
+                    ])
+                };
+                let read_i64_at = |off: usize| -> i64 {
+                    i64::from_le_bytes([
+                        section_map_data[off], section_map_data[off+1], section_map_data[off+2], section_map_data[off+3],
+                        section_map_data[off+4], section_map_data[off+5], section_map_data[off+6], section_map_data[off+7],
+                    ])
+                };
+                
+                let compressed_size = read_u64_at(spos);        // 0x00
+                let decompressed_size = read_u64_at(spos + 0x08); // 0x08
+                let _encrypted = read_u64_at(spos + 0x10);      // 0x10
+                let _hash_code = read_u64_at(spos + 0x18);      // 0x18
+                let section_name_length = read_i64_at(spos + 0x20) as usize; // 0x20
+                let _unknown = read_u64_at(spos + 0x28);        // 0x28
+                let encoding = read_u64_at(spos + 0x30);        // 0x30
+                let page_count = read_u64_at(spos + 0x38) as usize; // 0x38
+                spos += 0x40;
+                
+                // Read section name (Unicode, variable length)
+                let mut section_name = String::new();
+                if section_name_length > 0 && spos + section_name_length <= section_map_data.len() {
+                    // Unicode (UTF-16LE) encoded name
+                    let name_bytes = &section_map_data[spos..spos + section_name_length];
+                    let u16_chars: Vec<u16> = name_bytes.chunks_exact(2)
+                        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                        .collect();
+                    section_name = String::from_utf16_lossy(&u16_chars).replace('\0', "");
+                    spos += section_name_length;
+                }
+                
+                // Read page entries (7 x 8-byte fields per page)
+                let mut descriptor = DwgSectionDescriptor::with_name(&section_name);
+                descriptor.compressed_size = compressed_size;
+                descriptor.decompressed_size = decompressed_size;
+                descriptor.encoding = Some(encoding);
+                
+                for _ in 0..page_count {
+                    if spos + 56 > section_map_data.len() { break; }
+                    
+                    let page_offset = read_u64_at(spos);        // Data offset
+                    let page_size = read_i64_at(spos + 8);       // Page size
+                    let page_number = read_i64_at(spos + 16) as i32; // Page ID
+                    let page_decomp_size = read_u64_at(spos + 24); // Decompressed size
+                    let page_comp_size = read_u64_at(spos + 32);  // Compressed size
+                    let _page_checksum = read_u64_at(spos + 40);  // Checksum
+                    let _page_crc = read_u64_at(spos + 48);       // CRC
+                    spos += 56;
+                    
+                    use super::section::DwgLocalSectionMap;
+                    let local_section = DwgLocalSectionMap {
+                        page_number,
+                        offset: page_offset,
+                        size: page_decomp_size,          // DecompressedSize (position 24)
+                        page_size: page_size as u64,     // raw page size (position 8)
+                        compressed_size: page_comp_size, // CompressedSize (position 32)
+                        checksum: 0,
+                        crc: 0,
+                    };
+                    descriptor.local_sections.push(local_section);
+                }
+                
+                if !section_name.is_empty() {
+                    header.descriptors.insert(section_name, descriptor);
+                }
+            }
+        }
+        
+        let ac21_header = DwgFileHeaderAC21 {
+            base: header,
+            compressed_metadata: Some(compressed_metadata),
+        };
+        
+        Ok(DwgFileHeaderType::AC21(ac21_header))
+    }
+    
+    /// Get a decoded+decompressed page buffer for AC21 format
+    fn get_page_buffer_ac21(&mut self, page_offset: u64, compressed_size: u64, uncompressed_size: u64, correction_factor: u64, block_size: usize) -> Result<Vec<u8>> {
+        use super::decompressor::Lz77AC21Decompressor;
+        
+        // Avoid shifted bits
+        let v = compressed_size + 7;
+        let v1 = v & 0xFFFFFFF8u64;  // 32-bit mask like C#
+        let total_size = (v1.wrapping_mul(correction_factor) as u32) as usize;
+        let factor = (total_size + block_size - 1) / block_size;
+        let length = factor * 255;
+        
+        let mut buffer = vec![0u8; length];
+        
+        // Relative to data page map 1, add 0x480 to get stream position
+        let seek_pos = 0x480 + page_offset;
+        self.reader.seek(SeekFrom::Start(seek_pos))?;
+        self.reader.read_exact(&mut buffer[..length])?;
+        
+        let mut compressed_data = vec![0u8; total_size];
+        reed_solomon_decoding(&buffer, &mut compressed_data, factor, block_size);
+        
+        let mut decompressed_data = vec![0u8; uncompressed_size as usize];
+        Lz77AC21Decompressor::decompress(&compressed_data, 0, compressed_size as usize, &mut decompressed_data)?;
+        
+        Ok(decompressed_data)
+    }
+}
+
+/// Reed-Solomon de-interleaving (not full error correction)
+fn reed_solomon_decoding(encoded: &[u8], buffer: &mut [u8], factor: usize, block_size: usize) {
+    let mut index = 0usize;
+    let mut n = 0usize;
+    let mut remaining = buffer.len();
+    
+    for _ in 0..factor {
+        let cindex_start = n;
+        if n < encoded.len() {
+            let size = remaining.min(block_size);
+            remaining -= size;
+            let end = index + size;
+            let mut cindex = cindex_start;
+            while index < end {
+                if cindex < encoded.len() {
+                    buffer[index] = encoded[cindex];
+                }
+                index += 1;
+                cindex += factor;
+            }
+        }
+        n += 1;
     }
 }
 
