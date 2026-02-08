@@ -1513,7 +1513,9 @@ impl DwgWriter {
         section.push(0);
         section.push(0);
         let crc = Crc8::calculate(&[0, 0], 0xC0C1);
-        section.extend_from_slice(&crc.to_le_bytes());
+        // Handle section CRC is big-endian (high byte first)
+        section.push((crc >> 8) as u8);
+        section.push((crc & 0xFF) as u8);
         Ok(section)
     }
 
@@ -1523,7 +1525,9 @@ impl DwgWriter {
         chunk[1] = (size & 0xFF) as u8;
         let crc = Crc8::calculate(chunk, 0xC0C1);
         section.extend_from_slice(chunk);
-        section.extend_from_slice(&crc.to_le_bytes());
+        // Handle section CRC is big-endian (high byte first)
+        section.push((crc >> 8) as u8);
+        section.push((crc & 0xFF) as u8);
         chunk.clear();
     }
 
@@ -1647,7 +1651,7 @@ impl WriteContext {
 
             let comp_padding = compression_padding(compressed.len());
             let page_size = 32 + compressed.len() + comp_padding;
-            let oda_checksum = Self::adler_checksum(&compressed);
+            let oda_checksum = Self::adler_checksum(0, &compressed);
             let page_number = self.next_page_number;
             self.next_page_number += 1;
 
@@ -1655,17 +1659,18 @@ impl WriteContext {
             let stream_pos = self.output.len();
 
             // 32-byte data section header
+            // Fields: type(4) section_id(4) comp_size(4) page_size(4) offset(8) checksum(4) ODA(4)
             let mut header = [0u8; 32];
             header[0..4].copy_from_slice(&DATA_PAGE_TYPE.to_le_bytes());
             header[4..8].copy_from_slice(&(descriptor.section_id as u32).to_le_bytes());
             header[8..12].copy_from_slice(&(compressed.len() as u32).to_le_bytes());
             header[12..16].copy_from_slice(&(ds as u32).to_le_bytes());
             header[16..24].copy_from_slice(&(offset as u64).to_le_bytes());
-            header[24..28].copy_from_slice(&oda_checksum.to_le_bytes());
-            header[28..32].copy_from_slice(&0u32.to_le_bytes());
+            header[24..28].copy_from_slice(&0u32.to_le_bytes()); // checksum placeholder
+            header[28..32].copy_from_slice(&oda_checksum.to_le_bytes()); // ODA
 
-            let hdr_checksum = Self::adler_checksum(&header);
-            header[28..32].copy_from_slice(&hdr_checksum.to_le_bytes());
+            let hdr_checksum = Self::adler_checksum(oda_checksum, &header);
+            header[24..28].copy_from_slice(&hdr_checksum.to_le_bytes());
 
             let mask = 0x4164536Bu32 ^ (stream_pos as u32);
             for i in (0..32).step_by(4) {
@@ -1725,12 +1730,16 @@ impl WriteContext {
 
         let sm_comp_padding = compression_padding(section_map_compressed.len());
         {
+            // Compute chained checksum: Adler32(0, header_with_cksum=0) → Adler32(result, compressed)
             let mut sm_header = [0u8; 20];
             sm_header[0..4].copy_from_slice(&SECTION_MAP_TYPE.to_le_bytes());
             sm_header[4..8].copy_from_slice(&(section_map_data.len() as u32).to_le_bytes());
             sm_header[8..12].copy_from_slice(&(section_map_compressed.len() as u32).to_le_bytes());
             sm_header[12..16].copy_from_slice(&2u32.to_le_bytes());
-            sm_header[16..20].copy_from_slice(&Self::adler_checksum(&section_map_compressed).to_le_bytes());
+            sm_header[16..20].copy_from_slice(&0u32.to_le_bytes()); // checksum placeholder
+            let cksum = Self::adler_checksum(0, &sm_header);
+            let cksum = Self::adler_checksum(cksum, &section_map_compressed);
+            sm_header[16..20].copy_from_slice(&cksum.to_le_bytes());
             self.output.extend_from_slice(&sm_header);
         }
         self.output.extend_from_slice(&section_map_compressed);
@@ -1755,12 +1764,16 @@ impl WriteContext {
 
         let pm_comp_padding = compression_padding(page_map_compressed.len());
         {
+            // Compute chained checksum: Adler32(0, header_with_cksum=0) → Adler32(result, compressed)
             let mut pm_header = [0u8; 20];
             pm_header[0..4].copy_from_slice(&PAGE_MAP_TYPE.to_le_bytes());
             pm_header[4..8].copy_from_slice(&(page_map_data.len() as u32).to_le_bytes());
             pm_header[8..12].copy_from_slice(&(page_map_compressed.len() as u32).to_le_bytes());
             pm_header[12..16].copy_from_slice(&2u32.to_le_bytes());
-            pm_header[16..20].copy_from_slice(&Self::adler_checksum(&page_map_compressed).to_le_bytes());
+            pm_header[16..20].copy_from_slice(&0u32.to_le_bytes()); // checksum placeholder
+            let cksum = Self::adler_checksum(0, &pm_header);
+            let cksum = Self::adler_checksum(cksum, &page_map_compressed);
+            pm_header[16..20].copy_from_slice(&cksum.to_le_bytes());
             self.output.extend_from_slice(&pm_header);
         }
         self.output.extend_from_slice(&page_map_compressed);
@@ -1911,23 +1924,26 @@ impl WriteContext {
         self.output[0x80..0x80 + copy_len].copy_from_slice(&encrypted[..copy_len]);
     }
 
-    fn adler_checksum(data: &[u8]) -> u32 {
-        let mut sum1: u32 = 0;
-        let mut sum2: u32 = 0;
-        for &byte in data {
-            sum1 = sum1.wrapping_add(byte as u32);
-            sum2 = sum2.wrapping_add(sum1);
+    fn adler_checksum(seed: u32, data: &[u8]) -> u32 {
+        let mut sum1: u32 = seed & 0xFFFF;
+        let mut sum2: u32 = seed >> 16;
+        let mut index = 0;
+        while index < data.len() {
+            let chunk_end = (index + 0x15B0).min(data.len());
+            while index < chunk_end {
+                sum1 = sum1.wrapping_add(data[index] as u32);
+                sum2 = sum2.wrapping_add(sum1);
+                index += 1;
+            }
+            sum1 %= 0xFFF1;
+            sum2 %= 0xFFF1;
         }
-        sum1 %= 0xFFF1;
-        sum2 %= 0xFFF1;
-        (sum2 << 16) | sum1
+        (sum2 << 16) | (sum1 & 0xFFFF)
     }
 }
 
 fn crc32_dwg(data: &[u8]) -> u32 {
-    let mut crc = Crc32::new();
-    crc.update_slice(data);
-    crc.value()
+    Crc32::calculate(data)
 }
 
 impl Default for DwgWriter {
