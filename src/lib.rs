@@ -65,7 +65,7 @@ pub mod objects;
 // Re-export commonly used types
 pub use error::{DxfError, Result};
 pub use types::{
-    DxfVersion, BoundingBox2D, BoundingBox3D, Color, Handle, LineWeight, Transparency, Vector2,
+    ACadVersion, DxfVersion, BoundingBox2D, BoundingBox3D, Color, Handle, LineWeight, Transparency, Vector2,
     Vector3,
 };
 
@@ -85,6 +85,7 @@ pub use document::CadDocument;
 
 // Re-export I/O types
 pub use io::dxf::{DxfReader, DxfWriter};
+pub use io::dwg::{DwgReader, DwgReaderConfiguration};
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -195,22 +195,22 @@ fn create_comprehensive_document() -> CadDocument {
     let mut boundary = BoundaryPath::new();
     
     // Add line edges to form a rectangle
-    boundary.add_edge(BoundaryPathEdge::Line {
+    boundary.add_edge(BoundaryEdge::Line(LineEdge {
         start: Vector2::new(x, y),
         end: Vector2::new(x + 10.0, y),
-    });
-    boundary.add_edge(BoundaryPathEdge::Line {
+    }));
+    boundary.add_edge(BoundaryEdge::Line(LineEdge {
         start: Vector2::new(x + 10.0, y),
         end: Vector2::new(x + 10.0, y + 10.0),
-    });
-    boundary.add_edge(BoundaryPathEdge::Line {
+    }));
+    boundary.add_edge(BoundaryEdge::Line(LineEdge {
         start: Vector2::new(x + 10.0, y + 10.0),
         end: Vector2::new(x, y + 10.0),
-    });
-    boundary.add_edge(BoundaryPathEdge::Line {
+    }));
+    boundary.add_edge(BoundaryEdge::Line(LineEdge {
         start: Vector2::new(x, y + 10.0),
         end: Vector2::new(x, y),
-    });
+    }));
     
     hatch.boundary_paths.push(boundary);
     hatch.common.color = Color::from_rgb(150, 150, 200);

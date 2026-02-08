@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>net9.0;net48</TargetFrameworks>
+		<LangVersion>latest</LangVersion>
+		<DefineConstants>PUBLIC</DefineConstants>
+	</PropertyGroup>
+
+	<Import Project="..\CSUtilities\CSUtilities.projitems" Label="Shared" />
+
+</Project>
