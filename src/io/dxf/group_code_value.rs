@@ -42,9 +42,21 @@ pub enum GroupCodeValueType {
 }
 
 impl GroupCodeValueType {
-    /// Determine the value type from a DXF code
+    /// Determine the value type from a DXF group code enum.
+    /// NOTE: This goes through the DxfCode enum, which may not cover all codes.
+    /// For binary reading where correctness is critical, use `from_raw_code` instead.
     pub fn from_code(code: DxfCode) -> Self {
-        let code_num = code.to_i32();
+        // Delegate to from_raw_code using the raw i32 representation.
+        // However, DxfCode::from_i32 can lose unmapped codes (they become Invalid = -9999).
+        // So we use the DxfCode's i32 representation which preserves the original value
+        // only if the DxfCode was constructed with a known variant.
+        Self::from_raw_code(code.to_i32())
+    }
+
+    /// Determine the value type from a raw integer group code.
+    /// This is the canonical mapping and should be preferred over `from_code`
+    /// when the original integer code is available (e.g., binary DXF reading).
+    pub fn from_raw_code(code_num: i32) -> Self {
 
         match code_num {
             // String values (0-9, 100-109, 300-309, 999)
@@ -72,9 +84,14 @@ impl GroupCodeValueType {
                 GroupCodeValueType::Int32
             }
 
-            // 64-bit integers (160-169, 450-459)
-            160..=169 | 450..=459 => {
+            // 64-bit integers (160-169)
+            160..=169 => {
                 GroupCodeValueType::Int64
+            }
+
+            // 32-bit integers (450-459) — DXF "Long" = 4-byte int
+            450..=459 => {
+                GroupCodeValueType::Int32
             }
 
             // Boolean values (290-299)
@@ -103,7 +120,7 @@ impl GroupCodeValueType {
             1000..=1009 => GroupCodeValueType::String,
             1040..=1042 => GroupCodeValueType::Double,
             1010..=1059 => GroupCodeValueType::Double,
-            1070 => GroupCodeValueType::Int16,
+            1060..=1070 => GroupCodeValueType::Int16,
             1071 => GroupCodeValueType::Int32,
 
             // Default to None for unknown codes

@@ -90,10 +90,9 @@ impl<R: Read + Seek> DxfBinaryReader<R> {
     
     /// Read a value from the binary stream based on the group code
     fn read_value_for_code(&mut self, code: i32) -> Result<String> {
-        use crate::io::dxf::{DxfCode, GroupCodeValueType};
+        use crate::io::dxf::GroupCodeValueType;
         
-        let dxf_code = DxfCode::from_i32(code);
-        let value_type = GroupCodeValueType::from_code(dxf_code);
+        let value_type = GroupCodeValueType::from_raw_code(code);
         
         match value_type {
             GroupCodeValueType::String => {
@@ -169,7 +168,25 @@ impl<R: Read + Seek> DxfBinaryReader<R> {
                 Ok(if byte[0] != 0 { "1" } else { "0" }.to_string())
             }
             
-            GroupCodeValueType::BinaryData | GroupCodeValueType::Handle => {
+            GroupCodeValueType::BinaryData => {
+                // Length-prefixed binary chunk: 1-byte length + N raw bytes
+                let mut len_byte = [0u8; 1];
+                self.reader.read_exact(&mut len_byte)?;
+                self.position += 1;
+                
+                let length = len_byte[0] as usize;
+                let mut data = vec![0u8; length];
+                if length > 0 {
+                    self.reader.read_exact(&mut data)?;
+                    self.position += length as u64;
+                }
+                
+                // Convert raw bytes to uppercase hex string (matches text DXF representation)
+                let hex: String = data.iter().map(|b| format!("{:02X}", b)).collect();
+                Ok(hex)
+            }
+
+            GroupCodeValueType::Handle => {
                 // Null-terminated hex string
                 let mut bytes = Vec::new();
                 loop {
@@ -183,7 +200,6 @@ impl<R: Read + Seek> DxfBinaryReader<R> {
                     bytes.push(byte[0]);
                 }
                 
-                // Handles should be ASCII hex, but use lossy for robustness
                 Ok(String::from_utf8_lossy(&bytes).into_owned())
             }
             
