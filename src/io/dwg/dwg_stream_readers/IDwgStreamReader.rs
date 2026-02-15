@@ -4,15 +4,21 @@ use crate::error::Result;
 use crate::types::{Color, Transparency, Vector2, Vector3};
 
 /// Handle reference addressing mode in DWG streams.
+/// Values match the C# DwgReferenceType enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DwgReferenceType {
-    Absolute,
-    Relative,
-    SoftPointer,
-    HardPointer,
-    SoftOwnership,
-    HardOwnership,
-    Unknown(u8),
+    /// Undefined (code & 0x03 == 0)
+    Undefined = 0,
+    /// (code & 0x03 == 1)  
+    Unknown1 = 1,
+    /// Soft ownership reference (code & 0x03 == 2): owner doesn't need the owned object.
+    SoftOwnership = 2,
+    /// Hard ownership reference (code & 0x03 == 3): owner needs the owned object.
+    HardOwnership = 3,
+    /// Soft pointer reference (code & 0x03 == 0, but mapped via handle code 4): referencing object doesn't need the referenced.
+    SoftPointer = 4,
+    /// Hard pointer reference (code & 0x03 == 1, but mapped via handle code 5): referencing object needs the referenced.
+    HardPointer = 5,
 }
 
 /// Generic DWG object type code.
