@@ -39,12 +39,15 @@ pub mod dwg_summary_info_reader;
 #[path = "IDwgStreamReader.rs"]
 pub mod idwg_stream_reader;
 
+pub use dwg_app_info_reader::{DwgAppInfo, DwgAppInfoReader};
 pub use dwg_lz77_ac18_decompressor::DwgLz77Ac18Decompressor;
 pub use dwg_lz77_ac21_decompressor::DwgLz77Ac21Decompressor;
+pub use dwg_preview_reader::{DwgPreview, DwgPreviewReader, PreviewType};
 pub use dwg_stream_reader_ac12::DwgStreamReaderAc12;
 pub use dwg_stream_reader_ac15::DwgStreamReaderAc15;
 pub use dwg_stream_reader_ac18::DwgStreamReaderAc18;
 pub use dwg_stream_reader_ac21::DwgStreamReaderAc21;
 pub use dwg_stream_reader_ac24::DwgStreamReaderAc24;
 pub use dwg_stream_reader_base::DwgStreamReaderBase;
+pub use dwg_summary_info_reader::{CadSummaryInfo, DwgSummaryInfoReader};
 pub use idwg_stream_reader::{DwgObjectType, DwgReferenceType, DwgStreamReader};

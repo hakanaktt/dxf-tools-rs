@@ -1,45 +1,34 @@
 use std::io::{Read, Seek};
 use std::ops::{Deref, DerefMut};
 
-use crate::{error::Result, types::Vector3};
+use crate::types::DxfVersion;
 
 use super::dwg_stream_reader_ac12::DwgStreamReaderAc12;
-use super::idwg_stream_reader::DwgStreamReader;
+use super::dwg_stream_reader_base::DwgStreamReaderBase;
 
 /// AC1015 DWG stream reader.
+/// Version-specific behavior (read_bit_extrusion, read_bit_thickness)
+/// is handled in DwgStreamReaderBase via the `version` field.
 pub struct DwgStreamReaderAc15 {
 	inner: DwgStreamReaderAc12,
 }
 
 impl DwgStreamReaderAc15 {
 	pub fn new<R: Read + Seek + 'static>(stream: R) -> Self {
+		let mut base = DwgStreamReaderBase::new(Box::new(stream));
+		base.version = DxfVersion::AC1015;
 		Self {
-			inner: DwgStreamReaderAc12::new(stream),
+			inner: DwgStreamReaderAc12::from_base(base),
 		}
 	}
 
-	pub fn from_ac12(inner: DwgStreamReaderAc12) -> Self {
+	pub fn from_ac12(mut inner: DwgStreamReaderAc12) -> Self {
+		inner.version = DxfVersion::AC1015;
 		Self { inner }
 	}
 
 	pub fn into_ac12(self) -> DwgStreamReaderAc12 {
 		self.inner
-	}
-
-	pub fn read_bit_extrusion(&mut self) -> Result<Vector3> {
-		if self.read_bit()? {
-			Ok(Vector3::new(0.0, 0.0, 1.0))
-		} else {
-			self.read_3_bit_double()
-		}
-	}
-
-	pub fn read_bit_thickness(&mut self) -> Result<f64> {
-		if self.read_bit()? {
-			Ok(0.0)
-		} else {
-			self.read_bit_double()
-		}
 	}
 }
 

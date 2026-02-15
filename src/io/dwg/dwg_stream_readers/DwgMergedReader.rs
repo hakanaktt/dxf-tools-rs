@@ -263,6 +263,9 @@ impl DwgStreamReader for DwgMergedReader {
     }
 
     fn read_text_unicode(&mut self) -> Result<String> {
+        if self.text_reader.is_empty() {
+            return Ok(String::new());
+        }
         self.text_reader.read_text_unicode()
     }
 
@@ -275,6 +278,9 @@ impl DwgStreamReader for DwgMergedReader {
     }
 
     fn read_variable_text(&mut self) -> Result<String> {
+        if self.text_reader.is_empty() {
+            return Ok(String::new());
+        }
         self.text_reader.read_variable_text()
     }
 

@@ -1,6 +1,8 @@
 use std::io::{Read, Seek};
 use std::ops::{Deref, DerefMut};
 
+use crate::types::DxfVersion;
+
 use super::dwg_stream_reader_base::DwgStreamReaderBase;
 
 /// AC1012/AC1014 DWG stream reader.
@@ -10,9 +12,9 @@ pub struct DwgStreamReaderAc12 {
 
 impl DwgStreamReaderAc12 {
 	pub fn new<R: Read + Seek + 'static>(stream: R) -> Self {
-		Self {
-			inner: DwgStreamReaderBase::new(Box::new(stream)),
-		}
+		let mut base = DwgStreamReaderBase::new(Box::new(stream));
+		base.version = DxfVersion::AC1012;
+		Self { inner: base }
 	}
 
 	pub fn from_base(inner: DwgStreamReaderBase) -> Self {
