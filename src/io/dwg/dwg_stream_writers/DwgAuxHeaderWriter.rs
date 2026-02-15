@@ -92,8 +92,8 @@ impl DwgAuxHeaderWriter {
         writer.write_raw_short(0)?;
         // RS: Number of saves part 1 - number of saves part 2
         writer.write_raw_short(1)?;
-        // RL: 0 (4 times)
-        for _ in 0..4 {
+        // RL: 0 (3 times)
+        for _ in 0..3 {
             writer.write_raw_long(0)?;
         }
         // RL: Number of saves

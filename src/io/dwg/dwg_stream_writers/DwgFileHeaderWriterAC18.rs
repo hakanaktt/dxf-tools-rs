@@ -291,6 +291,12 @@ impl DwgFileHeaderWriterAc18 {
             + compression_calculator(counter as i32) as i64;
         section.size = size;
 
+        // Sync the list entry with local section (C# reference semantics)
+        if let Some(last) = self.local_sections.last_mut() {
+            last.seeker = section.seeker;
+            last.size = section.size;
+        }
+
         let mut stream_data = Vec::new();
         for sec in &self.local_sections {
             stream_data.extend_from_slice(&sec.page_number.to_le_bytes());
@@ -298,6 +304,11 @@ impl DwgFileHeaderWriterAc18 {
         }
 
         self.compress_checksum(&mut section, &stream_data)?;
+
+        // Sync again after compress_checksum (which modifies section further)
+        if let Some(last) = self.local_sections.last_mut() {
+            *last = section.clone();
+        }
 
         let last = self.local_sections.last().unwrap().clone();
         self.gap_amount = 0;

@@ -15,7 +15,7 @@ pub struct DwgAppInfoWriter;
 impl DwgAppInfoWriter {
     pub fn write(version: DxfVersion) -> Result<Vec<u8>> {
         let mut stream = Cursor::new(Vec::<u8>::new());
-        let mut writer = DwgStreamWriterBase::get_stream_writer(version, Box::new(Cursor::new(Vec::new())), "windows-1252");
+        let mut writer = DwgStreamWriterBase::get_stream_writer(version, Box::new(Cursor::new(Vec::new())), "utf-16");
 
         let version_str = env!("CARGO_PKG_VERSION");
         let empty_arr = [0u8; 16];

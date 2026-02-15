@@ -85,6 +85,8 @@ impl<W: Write + Seek> DwgWriter<W> {
             ));
         }
 
+        let maint_ver = version.maintenance_version();
+
         let mut file_header_writer: Box<dyn DwgFileHeaderWriter> = match version {
             DxfVersion::AC1014 | DxfVersion::AC1015 => {
                 Box::new(DwgFileHeaderWriterAc15::new(
@@ -92,7 +94,7 @@ impl<W: Write + Seek> DwgWriter<W> {
                     version,
                     version.to_string(),
                     "windows-1252".to_string(),
-                    0,
+                    maint_ver,
                 ))
             }
             DxfVersion::AC1018
@@ -103,7 +105,7 @@ impl<W: Write + Seek> DwgWriter<W> {
                     version,
                     version.to_string(),
                     "windows-1252".to_string(),
-                    0,
+                    maint_ver,
                 ))
             }
             _ => {
@@ -165,7 +167,7 @@ impl<W: Write + Seek> DwgWriter<W> {
         let data = DwgClassesWriter::write(
             version,
             &classes,
-            0, // maintenance_version
+            version.maintenance_version(),
         )?;
         fhw.add_section(DwgSectionDefinition::CLASSES, data, true, 0);
         Ok(())
@@ -283,7 +285,7 @@ impl<W: Write + Seek> DwgWriter<W> {
 
         let data = DwgAuxHeaderWriter::write(
             version,
-            0, // maintenance version
+            version.maintenance_version(),
             c_jdate,
             c_ms,
             u_jdate,

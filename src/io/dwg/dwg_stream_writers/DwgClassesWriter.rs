@@ -77,8 +77,8 @@ impl DwgClassesWriter {
 
             if ctx.r2004_plus {
                 writer.write_bit_long(c.instance_count)?;
-                writer.write_bit_long(0)?;
-                writer.write_bit_long(0)?;
+                writer.write_bit_long(c.dwg_version as i32)?;
+                writer.write_bit_long(c.maintenance_version as i32)?;
                 writer.write_bit_long(0)?;
                 writer.write_bit_long(0)?;
             }

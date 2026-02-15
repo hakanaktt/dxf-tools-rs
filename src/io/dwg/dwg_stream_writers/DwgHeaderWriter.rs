@@ -613,7 +613,7 @@ impl DwgHeaderWriter {
 
     fn wrap_with_sentinels_and_crc(
         version: DxfVersion,
-        header: &HeaderVariables,
+        _header: &HeaderVariables,
         writer: &mut dyn DwgStreamWriter,
     ) -> Result<Vec<u8>> {
         // Extract section data
@@ -642,7 +642,9 @@ impl DwgHeaderWriter {
         crc_data.extend_from_slice(&(section_data.len() as i32).to_le_bytes());
 
         // R2010+ with maintenance > 3 or R2018+
-        if (version >= DxfVersion::AC1024) || (version >= DxfVersion::AC1032) {
+        if (version >= DxfVersion::AC1024 && version.maintenance_version() > 3)
+            || version >= DxfVersion::AC1032
+        {
             crc_data.extend_from_slice(&0i32.to_le_bytes());
         }
 

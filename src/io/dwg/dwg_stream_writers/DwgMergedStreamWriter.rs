@@ -187,10 +187,7 @@ impl DwgStreamWriter for DwgMergedStreamWriter {
 
     fn write_spear_shift(&mut self) -> Result<()> {
         let main_size_bits = self.main_writer.position_in_bits();
-        let text_size_bits = {
-            let tl = stream_length(&mut *self.text_writer)?;
-            tl as i64 * 8 // approximate: text writer might have bit shift
-        };
+        let text_size_bits = self.text_writer.position_in_bits();
 
         self.main_writer.write_spear_shift()?;
 

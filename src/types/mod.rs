@@ -109,6 +109,20 @@ impl DxfVersion {
             _ => DxfVersion::Unknown,
         }
     }
+
+    /// Get the default ACADMAINTVER value for this version.
+    /// Values are relevant for the DWG writer, manually checked from DXF files.
+    pub fn maintenance_version(&self) -> i16 {
+        match self {
+            DxfVersion::AC1015 => 20,
+            DxfVersion::AC1018 => 104,
+            DxfVersion::AC1021 => 50,
+            DxfVersion::AC1024 => 226,
+            DxfVersion::AC1027 => 125,
+            DxfVersion::AC1032 => 228,
+            _ => 0,
+        }
+    }
 }
 
 impl std::fmt::Display for DxfVersion {
