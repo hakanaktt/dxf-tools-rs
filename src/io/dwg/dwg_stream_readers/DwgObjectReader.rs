@@ -54,6 +54,10 @@ pub enum RawObjectType {
     ProxyEntity,
     ProxyObject,
     MultiLeader,
+    MultiLeaderStyle,
+    ObjectContextData,
+    AnnotScaleObjectContextData,
+    MultiLeaderAnnotContext,
     Tolerance,
     MLine,
     OLEFrame,
@@ -300,6 +304,14 @@ impl DwgObjectReader {
             if matches!(raw_type, RawObjectType::Unknown(_)) {
                 if name.eq_ignore_ascii_case("MULTILEADER") {
                     raw_type = RawObjectType::MultiLeader;
+                } else if name.eq_ignore_ascii_case("MLEADERSTYLE") {
+                    raw_type = RawObjectType::MultiLeaderStyle;
+                } else if name.eq_ignore_ascii_case("OBJECTCONTEXTDATA") {
+                    raw_type = RawObjectType::ObjectContextData;
+                } else if name.eq_ignore_ascii_case("ACDB_ANNOTSCALEOBJECTCONTEXTDATA_CLASS") {
+                    raw_type = RawObjectType::AnnotScaleObjectContextData;
+                } else if name.eq_ignore_ascii_case("ACDB_MLEADEROBJECTCONTEXTDATA_CLASS") {
+                    raw_type = RawObjectType::MultiLeaderAnnotContext;
                 } else if name.eq_ignore_ascii_case("DICTIONARYWDFLT")
                     || name.eq_ignore_ascii_case("ACDBDICTIONARYWDFLT")
                 {
@@ -340,6 +352,18 @@ impl DwgObjectReader {
             }
             RawObjectType::MultiLeader => {
                 self.read_multi_leader(&mut parsed, &mut template)?;
+            }
+            RawObjectType::MultiLeaderStyle => {
+                self.read_multi_leader_style(&mut parsed, &mut template)?;
+            }
+            RawObjectType::ObjectContextData => {
+                self.read_object_context_data(&mut parsed, &mut template)?;
+            }
+            RawObjectType::AnnotScaleObjectContextData => {
+                self.read_annot_scale_object_context_data(&mut parsed, &mut template)?;
+            }
+            RawObjectType::MultiLeaderAnnotContext => {
+                self.read_multi_leader_annot_context_object(&mut parsed, &mut template)?;
             }
             RawObjectType::MText => {
                 self.read_mtext(&mut parsed, &mut template, true)?;
@@ -1085,6 +1109,230 @@ impl DwgObjectReader {
                 .insert("mleader_extended_to_text".to_string(), parsed.object_reader.read_bit()?);
         }
 
+        Ok(())
+    }
+
+    fn read_multi_leader_style(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+    ) -> Result<()> {
+        self.read_common_non_entity_data(parsed, template)?;
+
+        template.int_props.insert(
+            "mleader_style_content_type".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_style_draw_mleader_order".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_style_draw_leader_order".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+
+        template.int_props.insert(
+            "mleader_style_max_leader_segments".to_string(),
+            parsed.object_reader.read_bit_long()? as i64,
+        );
+        template.float_props.insert(
+            "mleader_style_first_segment_angle".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template.float_props.insert(
+            "mleader_style_second_segment_angle".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template.int_props.insert(
+            "mleader_style_line_type".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        let leader_line_color = parsed.object_reader.read_cm_color(false)?;
+        template.int_props.insert(
+            "mleader_style_line_color_index".to_string(),
+            leader_line_color.index().map(|v| v as i64).unwrap_or(-1),
+        );
+        template.int_props.insert(
+            "mleader_style_line_weight".to_string(),
+            parsed.object_reader.read_bit_long()? as i64,
+        );
+        template
+            .bool_props
+            .insert("mleader_style_enable_landing".to_string(), parsed.object_reader.read_bit()?);
+        template
+            .bool_props
+            .insert("mleader_style_enable_dogleg".to_string(), parsed.object_reader.read_bit()?);
+        template.float_props.insert(
+            "mleader_style_landing_gap".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template.float_props.insert(
+            "mleader_style_dogleg_length".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+
+        template.text_props.insert(
+            "mleader_style_name".to_string(),
+            parsed.text_reader.read_variable_text()?,
+        );
+        template.text_props.insert(
+            "mleader_style_description".to_string(),
+            parsed.text_reader.read_variable_text()?,
+        );
+
+        template.float_props.insert(
+            "mleader_style_arrowhead_size".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template.text_props.insert(
+            "mleader_style_default_text".to_string(),
+            parsed.text_reader.read_variable_text()?,
+        );
+        let text_color = parsed.object_reader.read_cm_color(false)?;
+        template.int_props.insert(
+            "mleader_style_text_color_index".to_string(),
+            text_color.index().map(|v| v as i64).unwrap_or(-1),
+        );
+        template.float_props.insert(
+            "mleader_style_text_height".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template
+            .bool_props
+            .insert("mleader_style_enable_text_frame".to_string(), parsed.object_reader.read_bit()?);
+
+        template
+            .handle_props
+            .insert("mleader_style_leader_linetype_handle".to_string(), self.handle_reference(parsed, 0)?);
+        template
+            .handle_props
+            .insert("mleader_style_arrow_head_handle".to_string(), self.handle_reference(parsed, 0)?);
+        template
+            .handle_props
+            .insert("mleader_style_text_style_handle".to_string(), self.handle_reference(parsed, 0)?);
+
+        template.int_props.insert(
+            "mleader_style_text_left_attachment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_style_text_angle".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_style_text_alignment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_style_text_right_attachment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+
+        template
+            .bool_props
+            .insert("mleader_style_has_block_content".to_string(), parsed.object_reader.read_bit()?);
+        let block_color = parsed.object_reader.read_cm_color(false)?;
+        template.int_props.insert(
+            "mleader_style_block_color_index".to_string(),
+            block_color.index().map(|v| v as i64).unwrap_or(-1),
+        );
+        template
+            .point3_props
+            .insert("mleader_style_block_scale".to_string(), parsed.object_reader.read_3_bit_double()?);
+        template.float_props.insert(
+            "mleader_style_block_rotation".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template
+            .bool_props
+            .insert("mleader_style_enable_block_scale".to_string(), parsed.object_reader.read_bit()?);
+        template
+            .bool_props
+            .insert("mleader_style_enable_block_rotation".to_string(), parsed.object_reader.read_bit()?);
+        template.int_props.insert(
+            "mleader_style_block_connection".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+
+        template.float_props.insert(
+            "mleader_style_scale".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template
+            .bool_props
+            .insert("mleader_style_is_annotative".to_string(), parsed.object_reader.read_bit()?);
+        template
+            .bool_props
+            .insert("mleader_style_break_gap_enabled".to_string(), parsed.object_reader.read_bit()?);
+        template.float_props.insert(
+            "mleader_style_break_gap_size".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+
+        if self.r2010_plus() {
+            template.int_props.insert(
+                "mleader_style_text_attachment_direction".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            template.int_props.insert(
+                "mleader_style_text_bottom_attachment".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            template.int_props.insert(
+                "mleader_style_text_top_attachment".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+        }
+
+        template
+            .handle_props
+            .insert("mleader_style_block_content_handle".to_string(), self.handle_reference(parsed, 0)?);
+
+        Ok(())
+    }
+
+    fn read_object_context_data(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+    ) -> Result<()> {
+        self.read_common_non_entity_data(parsed, template)?;
+
+        template.int_props.insert(
+            "object_context_data_version".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.bool_props.insert(
+            "object_context_data_has_file_to_extension_dict".to_string(),
+            !parsed.object_reader.read_bit()?,
+        );
+        template.bool_props.insert(
+            "object_context_data_is_default".to_string(),
+            parsed.object_reader.read_bit()?,
+        );
+        Ok(())
+    }
+
+    fn read_annot_scale_object_context_data(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+    ) -> Result<()> {
+        self.read_object_context_data(parsed, template)?;
+        template
+            .handle_props
+            .insert("object_context_data_scale_handle".to_string(), self.handle_reference(parsed, 0)?);
+        Ok(())
+    }
+
+    fn read_multi_leader_annot_context_object(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+    ) -> Result<()> {
+        self.read_annot_scale_object_context_data(parsed, template)?;
+        self.read_multi_leader_annot_context(parsed, template)?;
         Ok(())
     }
 
