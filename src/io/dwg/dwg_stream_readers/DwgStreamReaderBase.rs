@@ -10,6 +10,7 @@ use super::idwg_stream_reader::{DwgObjectType, DwgReferenceType, DwgStreamReader
 /// Shared implementation for DWG bit-stream readers.
 pub struct DwgStreamReaderBase {
     stream: Box<dyn ReadSeek>,
+    version: DxfVersion,
     bit_shift: u8,
     is_empty: bool,
     last_byte: u8,
@@ -20,6 +21,7 @@ impl DwgStreamReaderBase {
     pub fn new(stream: Box<dyn ReadSeek>) -> Self {
         Self {
             stream,
+            version: DxfVersion::Unknown,
             bit_shift: 0,
             is_empty: false,
             last_byte: 0,
@@ -28,10 +30,17 @@ impl DwgStreamReaderBase {
     }
 
     pub fn get_stream_handler<R: Read + Seek + 'static>(
-        _version: DxfVersion,
+        version: DxfVersion,
         stream: R,
     ) -> Self {
-        Self::new(Box::new(stream))
+        let mut reader = Self::new(Box::new(stream));
+        reader.version = version;
+        reader
+    }
+
+    pub fn with_version(mut self, version: DxfVersion) -> Self {
+        self.version = version;
+        self
     }
 
     pub fn with_text_stream(mut self, text_stream: Vec<u8>) -> Self {
@@ -61,54 +70,6 @@ impl DwgStreamReaderBase {
         self.last_byte = next;
         let low = next >> (8 - self.bit_shift);
         Ok(high | low)
-    }
-
-    fn read_handle(&mut self) -> Result<u64> {
-        self.handle_reference()
-    }
-
-    fn read_3_bits(&mut self) -> Result<u8> {
-        let mut value = 0u8;
-        if self.read_bit()? {
-            value |= 0b100;
-        }
-        if self.read_bit()? {
-            value |= 0b010;
-        }
-        if self.read_bit()? {
-            value |= 0b001;
-        }
-        Ok(value)
-    }
-
-    fn apply_flag_to_position(&mut self, position: u64) -> Result<u64> {
-        self.set_position_by_flag(position)
-    }
-
-    fn apply_shift_to_las_byte(value: u8, shift: u8) -> u8 {
-        value << (shift & 7)
-    }
-
-    fn apply_shift_to_arr(bytes: &mut [u8], shift: u8) {
-        let shift = shift & 7;
-        if shift == 0 || bytes.is_empty() {
-            return;
-        }
-
-        let mut prev = 0u8;
-        for b in bytes.iter_mut() {
-            let current = *b;
-            *b = (current << shift) | (prev >> (8 - shift));
-            prev = current;
-        }
-    }
-
-    fn julian_to_date(days: i32, millis: i32) -> (i32, i32) {
-        (days, millis)
-    }
-
-    fn throw_exception(message: &str) -> DxfError {
-        DxfError::Parse(message.to_string())
     }
 
     pub fn explore(&mut self) -> Result<u64> {
@@ -352,8 +313,31 @@ impl DwgStreamReader for DwgStreamReaderBase {
     }
 
     fn read_cm_color(&mut self, _use_text_stream: bool) -> Result<Color> {
-        let index = self.read_bit_short()?;
-        Ok(Color::from_index(index))
+        if self.version >= DxfVersion::AC1018 {
+            let _color_index = self.read_bit_short()?;
+            let rgb = self.read_bit_long()? as u32;
+            let arr = rgb.to_le_bytes();
+
+            let color = if rgb == 0xC000_0000 {
+                Color::ByLayer
+            } else if (rgb & 0x0100_0000) != 0 {
+                Color::from_index(arr[0] as i16)
+            } else {
+                Color::from_rgb(arr[2], arr[1], arr[0])
+            };
+
+            let id = self.read_byte()?;
+            if (id & 1) == 1 {
+                let _ = self.read_variable_text()?;
+            }
+            if (id & 2) == 2 {
+                let _ = self.read_variable_text()?;
+            }
+
+            return Ok(color);
+        }
+
+        Ok(Color::from_index(self.read_bit_short()?))
     }
 
     fn read_color_by_index(&mut self) -> Result<Color> {
@@ -369,8 +353,35 @@ impl DwgStreamReader for DwgStreamReaderBase {
     }
 
     fn read_en_color(&mut self) -> Result<(Color, Transparency, bool)> {
-        let color = self.read_cm_color(false)?;
-        Ok((color, Transparency::OPAQUE, false))
+        if self.version >= DxfVersion::AC1018 {
+            let size = self.read_bit_short()?;
+            if size == 0 {
+                return Ok((Color::ByBlock, Transparency::OPAQUE, false));
+            }
+
+            let flags = (size as u16) & 0xFF00;
+            let color = if (flags & 0x4000) != 0 {
+                Color::ByBlock
+            } else if (flags & 0x8000) != 0 {
+                let rgb = self.read_bit_long()? as u32;
+                let arr = rgb.to_le_bytes();
+                Color::from_rgb(arr[2], arr[1], arr[0])
+            } else {
+                Color::from_index((size & 0x0FFF) as i16)
+            };
+
+            let transparency = if (flags & 0x2000) != 0 {
+                let value = self.read_bit_long()? as u32;
+                Transparency::from_alpha_value(value)
+            } else {
+                Transparency::BY_LAYER
+            };
+
+            let is_book_color = (flags & 0x4000) != 0;
+            return Ok((color, transparency, is_book_color));
+        }
+
+        Ok((self.read_cm_color(false)?, Transparency::OPAQUE, false))
     }
 
     fn read_int(&mut self) -> Result<i32> {
@@ -399,6 +410,17 @@ impl DwgStreamReader for DwgStreamReaderBase {
     }
 
     fn read_object_type(&mut self) -> Result<DwgObjectType> {
+        if self.version >= DxfVersion::AC1024 {
+            let pair = self.read_2_bits()?;
+            let value = match pair {
+                0 => self.read_byte()? as u16,
+                1 => 0x01F0 + self.read_byte()? as u16,
+                2 | 3 => self.read_short()? as u16,
+                _ => unreachable!(),
+            };
+            return Ok(DwgObjectType(value));
+        }
+
         Ok(DwgObjectType(self.read_bit_short()? as u16))
     }
 
@@ -432,6 +454,21 @@ impl DwgStreamReader for DwgStreamReaderBase {
     }
 
     fn read_text_unicode(&mut self) -> Result<String> {
+        if self.version >= DxfVersion::AC1021 {
+            let text_length = self.read_short()?;
+            if text_length <= 0 {
+                return Ok(String::new());
+            }
+
+            let byte_len = (text_length as usize) * 2;
+            let bytes = self.read_bytes(byte_len)?;
+            let utf16: Vec<u16> = bytes
+                .chunks_exact(2)
+                .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+                .collect();
+            return Ok(String::from_utf16_lossy(&utf16));
+        }
+
         let length = self.read_bit_short()?;
         if length <= 0 {
             return Ok(String::new());
@@ -462,6 +499,21 @@ impl DwgStreamReader for DwgStreamReaderBase {
     }
 
     fn read_variable_text(&mut self) -> Result<String> {
+        if self.version >= DxfVersion::AC1021 {
+            let text_length = self.read_bit_short()?;
+            if text_length <= 0 {
+                return Ok(String::new());
+            }
+
+            let byte_len = (text_length as usize) * 2;
+            let bytes = self.read_bytes(byte_len)?;
+            let utf16: Vec<u16> = bytes
+                .chunks_exact(2)
+                .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+                .collect();
+            return Ok(String::from_utf16_lossy(&utf16));
+        }
+
         self.read_text_unicode()
     }
 

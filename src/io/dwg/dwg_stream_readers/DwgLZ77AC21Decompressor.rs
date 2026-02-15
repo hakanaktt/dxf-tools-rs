@@ -186,38 +186,6 @@ impl DwgLz77Ac21Decompressor {
         }
     }
 
-    fn copy_delegate(dst: &mut [u8], dst_index: u32, length: u32, src_offset: u32) {
-        Self::copy(dst, dst_index, length, src_offset);
-    }
-
-    fn copy(dst: &mut [u8], dst_index: u32, length: u32, src_offset: u32) {
-        Self::copy_bytes(dst, dst_index, length, src_offset);
-    }
-
-    fn copy_1b(dst: &mut [u8], dst_index: u32, src_offset: u32) {
-        Self::copy(dst, dst_index, 1, src_offset);
-    }
-
-    fn copy_2b(dst: &mut [u8], dst_index: u32, src_offset: u32) {
-        Self::copy(dst, dst_index, 2, src_offset);
-    }
-
-    fn copy_3b(dst: &mut [u8], dst_index: u32, src_offset: u32) {
-        Self::copy(dst, dst_index, 3, src_offset);
-    }
-
-    fn copy_4b(dst: &mut [u8], dst_index: u32, src_offset: u32) {
-        Self::copy(dst, dst_index, 4, src_offset);
-    }
-
-    fn copy_8b(dst: &mut [u8], dst_index: u32, src_offset: u32) {
-        Self::copy(dst, dst_index, 8, src_offset);
-    }
-
-    fn copy_16b(dst: &mut [u8], dst_index: u32, src_offset: u32) {
-        Self::copy(dst, dst_index, 16, src_offset);
-    }
-
     pub fn decompress_into_new(source: &[u8], initial_offset: u32, length: u32, out_len: usize) -> Result<Vec<u8>> {
         let mut out = vec![0u8; out_len];
         Self::decompress(source, initial_offset, length, &mut out);
