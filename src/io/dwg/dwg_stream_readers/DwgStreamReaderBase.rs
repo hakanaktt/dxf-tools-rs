@@ -126,8 +126,8 @@ impl DwgStreamReaderBase {
 
     /// Apply flag to position (for string stream detection).
     fn apply_flag_to_position(&mut self, last_pos: u64) -> Result<(u64, u64)> {
-        // Decrement by 16 bytes
-        let mut length = last_pos - 16;
+        // Decrement by 16 bytes (128 bits)
+        let mut length = if last_pos >= 16 { last_pos - 16 } else { 0 };
         self.set_position_in_bits(length)?;
 
         // Read short at location endbit - 128 (bits)
@@ -899,6 +899,7 @@ impl DwgStreamReader for DwgStreamReaderBase {
         // String stream present bit (last bit in pre-handles section)
         let flag = self.read_bit()?;
 
+        let start_position = position;
         if flag {
             // String stream present
             let (length, size) = self.apply_flag_to_position(position)?;
@@ -908,8 +909,10 @@ impl DwgStreamReader for DwgStreamReaderBase {
         } else {
             // Mark as empty
             self.is_empty = true;
+            // Set position to end of stream
             let end = self.stream.seek(SeekFrom::End(0))?;
-            Ok(end * 8)
+            self.stream.seek(SeekFrom::Start(end))?;
+            Ok(start_position)
         }
     }
 }

@@ -256,15 +256,19 @@ impl DwgObjectReader {
 
         let size_in_bits = size << 3;
 
-        let mut object_reader =
-            DwgStreamReaderBase::get_stream_handler(self.version, Cursor::new(self.buffer.clone()));
-        object_reader.set_position_in_bits(crc_reader.position_in_bits()?)?;
-        let object_initial_pos = object_reader.position_in_bits()?;
-        let object_type = object_reader.read_object_type()?;
-
         if self.r2010_plus() {
+            // MC: Size in bits of the handle stream (unsigned)
             let handle_size = crc_reader.read_modular_char()? as u64;
+
+            // handleSectionOffset is computed AFTER reading both modularShort AND modularChar
             let handle_section_offset = crc_reader.position_in_bits()? + size_in_bits as u64 - handle_size;
+
+            // Object reader positioned AFTER both modularShort and modularChar
+            let mut object_reader =
+                DwgStreamReaderBase::get_stream_handler(self.version, Cursor::new(self.buffer.clone()));
+            object_reader.set_position_in_bits(crc_reader.position_in_bits()?)?;
+            let object_initial_pos = object_reader.position_in_bits()?;
+            let object_type = object_reader.read_object_type()?;
 
             let mut handles_reader = DwgStreamReaderBase::get_stream_handler(
                 self.version,
@@ -287,10 +291,20 @@ impl DwgObjectReader {
                 text_reader,
             })
         } else {
+            // Pre-R2010: object reader positioned after modularShort only
+            let mut object_reader =
+                DwgStreamReaderBase::get_stream_handler(self.version, Cursor::new(self.buffer.clone()));
+            object_reader.set_position_in_bits(crc_reader.position_in_bits()?)?;
+            let object_initial_pos = object_reader.position_in_bits()?;
+            let object_type = object_reader.read_object_type()?;
+
             let handles_reader = DwgStreamReaderBase::get_stream_handler(
                 self.version,
                 Cursor::new(self.buffer.clone()),
             );
+            // Pre-R2010: text reader IS the object reader (they share the same stream)
+            // We create a separate reader at the same position as a workaround
+            // since Rust can't alias mutable references
             let text_reader = DwgStreamReaderBase::get_stream_handler(
                 self.version,
                 Cursor::new(self.buffer.clone()),
@@ -883,6 +897,68 @@ impl DwgObjectReader {
             let _ = parsed.object_reader.read_bit()?;
         }
 
+        // R2004+: background fill
+        if self.version >= DxfVersion::AC1018 {
+            let bg_flags = parsed.object_reader.read_bit_long()?;
+            template
+                .int_props
+                .insert("mtext_background_flags".to_string(), bg_flags as i64);
+
+            let has_bg = (bg_flags & 1) != 0
+                || (self.version > DxfVersion::AC1027 && (bg_flags & 0x10) != 0);
+
+            if has_bg {
+                // Background scale factor BD
+                template.float_props.insert(
+                    "mtext_background_scale".to_string(),
+                    parsed.object_reader.read_bit_double()?,
+                );
+                // Background color CMC
+                let _bg_color = parsed.object_reader.read_cm_color(false)?;
+                // Background transparency BL
+                let _bg_transparency = parsed.object_reader.read_bit_long()?;
+            }
+        }
+
+        // R2018+: annotative data
+        if self.version >= DxfVersion::AC1032 {
+            let is_not_annotative = parsed.object_reader.read_bit()?;
+            let is_annotative = !is_not_annotative;
+
+            if !is_annotative {
+                let _version = parsed.object_reader.read_bit_short()?;
+                let _default_flag = parsed.object_reader.read_bit()?;
+
+                // Registered application handle (hard pointer)
+                let _app_handle = self.handle_reference(parsed, 0)?;
+
+                // Redundant fields
+                let _attachment_point = parsed.object_reader.read_bit_long()?;
+                let _x_axis_dir = parsed.object_reader.read_3_bit_double()?;
+                let _insertion_point = parsed.object_reader.read_3_bit_double()?;
+                let _rect_width = parsed.object_reader.read_bit_double()?;
+                let _rect_height = parsed.object_reader.read_bit_double()?;
+                let _extents_width = parsed.object_reader.read_bit_double()?;
+                let _extents_height = parsed.object_reader.read_bit_double()?;
+
+                // Column type BS
+                let column_type = parsed.object_reader.read_bit_short()?;
+                if column_type != 0 {
+                    let column_count = parsed.object_reader.read_bit_long()?;
+                    let _column_width = parsed.object_reader.read_bit_double()?;
+                    let _column_gutter = parsed.object_reader.read_bit_double()?;
+                    let auto_height = parsed.object_reader.read_bit()?;
+                    let _flow_reversed = parsed.object_reader.read_bit()?;
+
+                    if !auto_height && column_type == 2 && column_count > 0 {
+                        for _ in 0..column_count {
+                            let _col_height = parsed.object_reader.read_bit_double()?;
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -933,6 +1009,23 @@ impl DwgObjectReader {
             );
         }
 
+        // R13-R14 only: DIMGAP
+        if self.r13_14_only() {
+            template
+                .float_props
+                .insert("leader_dim_gap".to_string(), parsed.object_reader.read_bit_double()?);
+        }
+
+        // Common: text height and width (for versions <= R2007)
+        if self.version <= DxfVersion::AC1021 {
+            template
+                .float_props
+                .insert("leader_text_height".to_string(), parsed.object_reader.read_bit_double()?);
+            template
+                .float_props
+                .insert("leader_text_width".to_string(), parsed.object_reader.read_bit_double()?);
+        }
+
         template.bool_props.insert(
             "leader_hook_line_same_dir".to_string(),
             parsed.object_reader.read_bit()?,
@@ -941,6 +1034,25 @@ impl DwgObjectReader {
             "leader_arrow_enabled".to_string(),
             parsed.object_reader.read_bit()?,
         );
+
+        // R13-R14 only: extra fields
+        if self.r13_14_only() {
+            let _arrowhead_type = parsed.object_reader.read_bit_short()?;
+            let _dimasz = parsed.object_reader.read_bit_double()?;
+            let _unknown_b1 = parsed.object_reader.read_bit()?;
+            let _unknown_b2 = parsed.object_reader.read_bit()?;
+            let _unknown_bs = parsed.object_reader.read_bit_short()?;
+            let _byblock_color = parsed.object_reader.read_bit_short()?;
+            let _unknown_b3 = parsed.object_reader.read_bit()?;
+            let _unknown_b4 = parsed.object_reader.read_bit()?;
+        }
+
+        // R2000+: unknown fields
+        if self.version >= DxfVersion::AC1015 {
+            let _unknown_bs = parsed.object_reader.read_bit_short()?;
+            let _unknown_b1 = parsed.object_reader.read_bit()?;
+            let _unknown_b2 = parsed.object_reader.read_bit()?;
+        }
 
         template
             .handle_props
@@ -1132,175 +1244,240 @@ impl DwgObjectReader {
     ) -> Result<()> {
         self.read_common_non_entity_data(parsed, template)?;
 
+        // R2010+: BS 179 Version (expected: 2)
+        if self.r2010_plus() {
+            let _version = parsed.object_reader.read_bit_short()?;
+        }
+
+        // BS 170 Content type
         template.int_props.insert(
             "mleader_style_content_type".to_string(),
             parsed.object_reader.read_bit_short()? as i64,
         );
+        // BS 171 Draw multi-leader order
         template.int_props.insert(
             "mleader_style_draw_mleader_order".to_string(),
             parsed.object_reader.read_bit_short()? as i64,
         );
+        // BS 172 Draw leader order
         template.int_props.insert(
             "mleader_style_draw_leader_order".to_string(),
             parsed.object_reader.read_bit_short()? as i64,
         );
-
+        // BL 90 Maximum number of points for leader
         template.int_props.insert(
             "mleader_style_max_leader_segments".to_string(),
             parsed.object_reader.read_bit_long()? as i64,
         );
+        // BD 40 First segment angle
         template.float_props.insert(
             "mleader_style_first_segment_angle".to_string(),
             parsed.object_reader.read_bit_double()?,
         );
+        // BD 41 Second segment angle
         template.float_props.insert(
             "mleader_style_second_segment_angle".to_string(),
             parsed.object_reader.read_bit_double()?,
         );
+        // BS 173 Leader type (path type)
         template.int_props.insert(
             "mleader_style_line_type".to_string(),
             parsed.object_reader.read_bit_short()? as i64,
         );
+        // CMC 91 Leader line color
         let leader_line_color = parsed.object_reader.read_cm_color(false)?;
         template.int_props.insert(
             "mleader_style_line_color_index".to_string(),
             leader_line_color.index().map(|v| v as i64).unwrap_or(-1),
         );
+
+        // H 340 Leader line type handle (hard pointer)
+        template.handle_props.insert(
+            "mleader_style_leader_linetype_handle".to_string(),
+            self.handle_reference(parsed, 0)?,
+        );
+
+        // BL 92 Leader line weight
         template.int_props.insert(
             "mleader_style_line_weight".to_string(),
             parsed.object_reader.read_bit_long()? as i64,
         );
-        template
-            .bool_props
-            .insert("mleader_style_enable_landing".to_string(), parsed.object_reader.read_bit()?);
-        template
-            .bool_props
-            .insert("mleader_style_enable_dogleg".to_string(), parsed.object_reader.read_bit()?);
+        // B 290 Is landing enabled
+        template.bool_props.insert(
+            "mleader_style_enable_landing".to_string(),
+            parsed.object_reader.read_bit()?,
+        );
+        // BD 42 Landing gap
         template.float_props.insert(
             "mleader_style_landing_gap".to_string(),
             parsed.object_reader.read_bit_double()?,
         );
+        // B 291 Auto include landing (dogleg enabled)
+        template.bool_props.insert(
+            "mleader_style_enable_dogleg".to_string(),
+            parsed.object_reader.read_bit()?,
+        );
+        // BD 43 Landing distance (dogleg length)
         template.float_props.insert(
             "mleader_style_dogleg_length".to_string(),
             parsed.object_reader.read_bit_double()?,
         );
-
-        template.text_props.insert(
-            "mleader_style_name".to_string(),
-            parsed.text_reader.read_variable_text()?,
-        );
+        // TV 3 Style description
         template.text_props.insert(
             "mleader_style_description".to_string(),
             parsed.text_reader.read_variable_text()?,
         );
 
+        // H 341 Arrow head block handle (hard pointer)
+        template.handle_props.insert(
+            "mleader_style_arrow_head_handle".to_string(),
+            self.handle_reference(parsed, 0)?,
+        );
+
+        // BD 44 Arrow head size
         template.float_props.insert(
             "mleader_style_arrowhead_size".to_string(),
             parsed.object_reader.read_bit_double()?,
         );
+        // TV 300 Text default
         template.text_props.insert(
             "mleader_style_default_text".to_string(),
             parsed.text_reader.read_variable_text()?,
         );
+
+        // H 342 Text style handle (hard pointer)
+        template.handle_props.insert(
+            "mleader_style_text_style_handle".to_string(),
+            self.handle_reference(parsed, 0)?,
+        );
+
+        // BS 174 Left attachment
+        template.int_props.insert(
+            "mleader_style_text_left_attachment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        // BS 178 Right attachment
+        template.int_props.insert(
+            "mleader_style_text_right_attachment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        // BS 175 Text angle type
+        template.int_props.insert(
+            "mleader_style_text_angle".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        // BS 176 Text alignment type
+        template.int_props.insert(
+            "mleader_style_text_alignment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        // CMC 93 Text color
         let text_color = parsed.object_reader.read_cm_color(false)?;
         template.int_props.insert(
             "mleader_style_text_color_index".to_string(),
             text_color.index().map(|v| v as i64).unwrap_or(-1),
         );
+        // BD 45 Text height
         template.float_props.insert(
             "mleader_style_text_height".to_string(),
             parsed.object_reader.read_bit_double()?,
         );
-        template
-            .bool_props
-            .insert("mleader_style_enable_text_frame".to_string(), parsed.object_reader.read_bit()?);
-
-        template
-            .handle_props
-            .insert("mleader_style_leader_linetype_handle".to_string(), self.handle_reference(parsed, 0)?);
-        template
-            .handle_props
-            .insert("mleader_style_arrow_head_handle".to_string(), self.handle_reference(parsed, 0)?);
-        template
-            .handle_props
-            .insert("mleader_style_text_style_handle".to_string(), self.handle_reference(parsed, 0)?);
-
-        template.int_props.insert(
-            "mleader_style_text_left_attachment".to_string(),
-            parsed.object_reader.read_bit_short()? as i64,
+        // B 292 Text frame enabled
+        template.bool_props.insert(
+            "mleader_style_enable_text_frame".to_string(),
+            parsed.object_reader.read_bit()?,
         );
-        template.int_props.insert(
-            "mleader_style_text_angle".to_string(),
-            parsed.object_reader.read_bit_short()? as i64,
+        // B 297 Always align text left
+        template.bool_props.insert(
+            "mleader_style_text_align_always_left".to_string(),
+            parsed.object_reader.read_bit()?,
         );
-        template.int_props.insert(
-            "mleader_style_text_alignment".to_string(),
-            parsed.object_reader.read_bit_short()? as i64,
-        );
-        template.int_props.insert(
-            "mleader_style_text_right_attachment".to_string(),
-            parsed.object_reader.read_bit_short()? as i64,
+        // BD 46 Align space
+        template.float_props.insert(
+            "mleader_style_align_space".to_string(),
+            parsed.object_reader.read_bit_double()?,
         );
 
-        template
-            .bool_props
-            .insert("mleader_style_has_block_content".to_string(), parsed.object_reader.read_bit()?);
+        // H 343 Block handle (hard pointer)
+        template.handle_props.insert(
+            "mleader_style_block_content_handle".to_string(),
+            self.handle_reference(parsed, 0)?,
+        );
+
+        // CMC 94 Block color
         let block_color = parsed.object_reader.read_cm_color(false)?;
         template.int_props.insert(
             "mleader_style_block_color_index".to_string(),
             block_color.index().map(|v| v as i64).unwrap_or(-1),
         );
-        template
-            .point3_props
-            .insert("mleader_style_block_scale".to_string(), parsed.object_reader.read_3_bit_double()?);
+        // 3BD 47,49,140 Block scale vector
+        template.point3_props.insert(
+            "mleader_style_block_scale".to_string(),
+            parsed.object_reader.read_3_bit_double()?,
+        );
+        // B 293 Is block scale enabled
+        template.bool_props.insert(
+            "mleader_style_enable_block_scale".to_string(),
+            parsed.object_reader.read_bit()?,
+        );
+        // BD 141 Block rotation
         template.float_props.insert(
             "mleader_style_block_rotation".to_string(),
             parsed.object_reader.read_bit_double()?,
         );
-        template
-            .bool_props
-            .insert("mleader_style_enable_block_scale".to_string(), parsed.object_reader.read_bit()?);
-        template
-            .bool_props
-            .insert("mleader_style_enable_block_rotation".to_string(), parsed.object_reader.read_bit()?);
+        // B 294 Is block rotation enabled
+        template.bool_props.insert(
+            "mleader_style_enable_block_rotation".to_string(),
+            parsed.object_reader.read_bit()?,
+        );
+        // BS 177 Block connection type
         template.int_props.insert(
             "mleader_style_block_connection".to_string(),
             parsed.object_reader.read_bit_short()? as i64,
         );
-
+        // BD 142 Scale factor
         template.float_props.insert(
             "mleader_style_scale".to_string(),
             parsed.object_reader.read_bit_double()?,
         );
-        template
-            .bool_props
-            .insert("mleader_style_is_annotative".to_string(), parsed.object_reader.read_bit()?);
-        template
-            .bool_props
-            .insert("mleader_style_break_gap_enabled".to_string(), parsed.object_reader.read_bit()?);
+        // B 295 Property changed
+        template.bool_props.insert(
+            "mleader_style_overwrite_property_value".to_string(),
+            parsed.object_reader.read_bit()?,
+        );
+        // B 296 Is annotative
+        template.bool_props.insert(
+            "mleader_style_is_annotative".to_string(),
+            parsed.object_reader.read_bit()?,
+        );
+        // BD 143 Break gap size
         template.float_props.insert(
             "mleader_style_break_gap_size".to_string(),
             parsed.object_reader.read_bit_double()?,
         );
 
         if self.r2010_plus() {
+            // BS 271 Attachment direction
             template.int_props.insert(
                 "mleader_style_text_attachment_direction".to_string(),
                 parsed.object_reader.read_bit_short()? as i64,
             );
+            // BS 273 Bottom attachment
             template.int_props.insert(
                 "mleader_style_text_bottom_attachment".to_string(),
                 parsed.object_reader.read_bit_short()? as i64,
             );
+            // BS 272 Top attachment
             template.int_props.insert(
                 "mleader_style_text_top_attachment".to_string(),
                 parsed.object_reader.read_bit_short()? as i64,
             );
         }
 
-        template
-            .handle_props
-            .insert("mleader_style_block_content_handle".to_string(), self.handle_reference(parsed, 0)?);
+        // R2013+: B 298 unknown flag
+        if self.version >= DxfVersion::AC1027 {
+            let _unknown_flag_298 = parsed.object_reader.read_bit()?;
+        }
 
         Ok(())
     }
@@ -2174,6 +2351,19 @@ impl DwgObjectReader {
             }
         }
 
+        // R13-R2000 only: previous/next entity handles
+        // Nolinks B - 1 if major links are assumed +1/-1, else 0
+        // For R2004+ this always has value 1 (links are not used)
+        if self.version < DxfVersion::AC1018 {
+            let no_links = parsed.object_reader.read_bit()?;
+            if !no_links {
+                // Previous entity (relative soft pointer)
+                let _prev_entity = parsed.handles_reader.handle_reference_from(template.handle)?;
+                // Next entity (relative soft pointer)
+                let _next_entity = parsed.handles_reader.handle_reference_from(template.handle)?;
+            }
+        }
+
         let (color, transparency, color_flag) = parsed.object_reader.read_en_color()?;
         template.color = Some(color);
         template.transparency = Some(transparency);
@@ -2184,6 +2374,14 @@ impl DwgObjectReader {
 
         template.line_type_scale = Some(parsed.object_reader.read_bit_double()?);
 
+        // Pre-R2000: read invisibility and return early
+        if self.version < DxfVersion::AC1015 {
+            let _invis = parsed.object_reader.read_bit_short()?;
+            // Note: pre-R2000 invisible when bit is 0, opposite of R2000+
+            return Ok(());
+        }
+
+        // R2000+:
         if self.version >= DxfVersion::AC1015 {
             let _layer = self.handle_reference(parsed, 0)?;
             let ltype_flags = parsed.object_reader.read_2_bits()?;
@@ -2216,11 +2414,8 @@ impl DwgObjectReader {
                 }
             }
 
-            let invis = parsed.object_reader.read_bit_short()?;
+            let _invis = parsed.object_reader.read_bit_short()?;
             template.line_weight = Some(parsed.object_reader.read_byte()? as i16);
-            if (invis & 1) != 0 {
-                // semantic parity: invisibility parsed and consumed
-            }
         }
 
         Ok(())
