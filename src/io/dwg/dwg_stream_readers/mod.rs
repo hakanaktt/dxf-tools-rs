@@ -1,0 +1,50 @@
+//! DWG stream readers (ported from ACadSharp `DwgStreamReaders`).
+
+#[path = "DwgAppInfoReader.rs"]
+pub mod dwg_app_info_reader;
+#[path = "DwgClassesReader.rs"]
+pub mod dwg_classes_reader;
+#[path = "DwgHandleReader.rs"]
+pub mod dwg_handle_reader;
+#[path = "DwgHeaderReader.rs"]
+pub mod dwg_header_reader;
+#[path = "DwgLZ77AC18Decompressor.rs"]
+pub mod dwg_lz77_ac18_decompressor;
+#[path = "DwgLZ77AC21Decompressor.rs"]
+pub mod dwg_lz77_ac21_decompressor;
+#[path = "DwgMergedReader.rs"]
+pub mod dwg_merged_reader;
+#[path = "DwgObjectReader.rs"]
+pub mod dwg_object_reader;
+#[path = "DwgObjectReader.Entities.rs"]
+pub mod dwg_object_reader_entities;
+#[path = "DwgObjectReader.Objects.rs"]
+pub mod dwg_object_reader_objects;
+#[path = "DwgPreviewReader.rs"]
+pub mod dwg_preview_reader;
+#[path = "DwgStreamReaderAC12.rs"]
+pub mod dwg_stream_reader_ac12;
+#[path = "DwgStreamReaderAC15.rs"]
+pub mod dwg_stream_reader_ac15;
+#[path = "DwgStreamReaderAC18.rs"]
+pub mod dwg_stream_reader_ac18;
+#[path = "DwgStreamReaderAC21.rs"]
+pub mod dwg_stream_reader_ac21;
+#[path = "DwgStreamReaderAC24.rs"]
+pub mod dwg_stream_reader_ac24;
+#[path = "DwgStreamReaderBase.rs"]
+pub mod dwg_stream_reader_base;
+#[path = "DwgSummaryInfoReader.rs"]
+pub mod dwg_summary_info_reader;
+#[path = "IDwgStreamReader.rs"]
+pub mod idwg_stream_reader;
+
+pub use dwg_lz77_ac18_decompressor::DwgLz77Ac18Decompressor;
+pub use dwg_lz77_ac21_decompressor::DwgLz77Ac21Decompressor;
+pub use dwg_stream_reader_ac12::DwgStreamReaderAc12;
+pub use dwg_stream_reader_ac15::DwgStreamReaderAc15;
+pub use dwg_stream_reader_ac18::DwgStreamReaderAc18;
+pub use dwg_stream_reader_ac21::DwgStreamReaderAc21;
+pub use dwg_stream_reader_ac24::DwgStreamReaderAc24;
+pub use dwg_stream_reader_base::DwgStreamReaderBase;
+pub use idwg_stream_reader::{DwgObjectType, DwgReferenceType, DwgStreamReader};
