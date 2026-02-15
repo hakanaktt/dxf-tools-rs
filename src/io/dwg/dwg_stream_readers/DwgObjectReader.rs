@@ -3,6 +3,7 @@ use std::io::Cursor;
 
 use crate::{
     error::Result,
+    io::dxf::GroupCodeValueType,
     types::{Color, DxfVersion, Transparency, Vector2, Vector3},
 };
 
@@ -46,6 +47,7 @@ pub enum RawObjectType {
     Ray,
     XLine,
     Dictionary,
+    DictionaryWithDefault,
     MText,
     Leader,
     Hatch,
@@ -163,6 +165,7 @@ pub struct DwgRawObject {
     pub point3_props: BTreeMap<String, Vector3>,
     pub handle_props: BTreeMap<String, u64>,
     pub handle_list_props: BTreeMap<String, Vec<u64>>,
+    pub binary_props: BTreeMap<String, Vec<u8>>,
 }
 
 pub struct DwgObjectReader {
@@ -293,10 +296,16 @@ impl DwgObjectReader {
         current_handle: u64,
     ) -> Result<Option<DwgRawObject>> {
         let mut raw_type = RawObjectType::from_code_for_version(self.version, parsed.object_type.0);
-        if matches!(raw_type, RawObjectType::Unknown(_)) {
-            if let Some(name) = self.classes.get(&(parsed.object_type.0 as i16)) {
+        if let Some(name) = self.classes.get(&(parsed.object_type.0 as i16)) {
+            if matches!(raw_type, RawObjectType::Unknown(_)) {
                 if name.eq_ignore_ascii_case("MULTILEADER") {
                     raw_type = RawObjectType::MultiLeader;
+                } else if name.eq_ignore_ascii_case("DICTIONARYWDFLT")
+                    || name.eq_ignore_ascii_case("ACDBDICTIONARYWDFLT")
+                {
+                    raw_type = RawObjectType::DictionaryWithDefault;
+                } else if name.eq_ignore_ascii_case("XRECORD") {
+                    raw_type = RawObjectType::XRecord;
                 }
             }
         }
@@ -320,6 +329,9 @@ impl DwgObjectReader {
             RawObjectType::Dictionary => {
                 self.read_dictionary(&mut parsed, &mut template)?;
             }
+            RawObjectType::DictionaryWithDefault => {
+                self.read_dictionary_with_default(&mut parsed, &mut template)?;
+            }
             RawObjectType::ProxyEntity => {
                 self.read_proxy_entity(&mut parsed, &mut template)?;
             }
@@ -331,6 +343,9 @@ impl DwgObjectReader {
             }
             RawObjectType::MText => {
                 self.read_mtext(&mut parsed, &mut template, true)?;
+            }
+            RawObjectType::XRecord => {
+                self.read_xrecord(&mut parsed, &mut template)?;
             }
             RawObjectType::Leader => {
                 self.read_leader(&mut parsed, &mut template)?;
@@ -369,7 +384,6 @@ impl DwgObjectReader {
             | RawObjectType::Dummy
             | RawObjectType::LongTransaction
             | RawObjectType::LwPolyline
-            | RawObjectType::XRecord
             | RawObjectType::Layout
             | RawObjectType::Unknown(_) => {
                 if matches!(raw_type, RawObjectType::Dictionary | RawObjectType::Unknown(_)) {
@@ -383,7 +397,7 @@ impl DwgObjectReader {
         // Best-effort raw payload extraction after semantic fields.
         let end_bits = parsed.object_initial_pos + (parsed.size as u64 * 8);
         let current_bits = parsed.object_reader.position_in_bits()?;
-        if end_bits > current_bits {
+        if template.data.is_empty() && end_bits > current_bits {
             let remaining = ((end_bits - current_bits) / 8) as usize;
             template.data = parsed.object_reader.read_bytes(remaining)?;
         }
@@ -759,6 +773,18 @@ impl DwgObjectReader {
         Ok(())
     }
 
+    fn read_dictionary_with_default(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+    ) -> Result<()> {
+        self.read_dictionary(parsed, template)?;
+        template
+            .handle_props
+            .insert("dictionary_default_entry_handle".to_string(), self.handle_reference(parsed, 0)?);
+        Ok(())
+    }
+
     fn read_mtext(
         &mut self,
         parsed: &mut ParsedObjectStreams,
@@ -901,8 +927,7 @@ impl DwgObjectReader {
                 .insert("mleader_version".to_string(), parsed.object_reader.read_bit_short()? as i64);
         }
 
-        // Context data is large/recursive in C#; keep strict consumption order of leading fields.
-        let _context_data_version = parsed.object_reader.read_bit_long()?;
+        self.read_multi_leader_annot_context(parsed, template)?;
 
         template
             .handle_props
@@ -944,6 +969,615 @@ impl DwgObjectReader {
         template
             .int_props
             .insert("mleader_content_type".to_string(), parsed.object_reader.read_bit_short()? as i64);
+
+        template
+            .handle_props
+            .insert("mleader_mtext_style_handle".to_string(), self.handle_reference(parsed, 0)?);
+        template.int_props.insert(
+            "mleader_text_left_attachment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_text_right_attachment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_text_angle".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_text_alignment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        let _ = parsed.object_reader.read_cm_color(false)?;
+        template
+            .bool_props
+            .insert("mleader_text_frame".to_string(), parsed.object_reader.read_bit()?);
+        template
+            .handle_props
+            .insert("mleader_block_content_handle".to_string(), self.handle_reference(parsed, 0)?);
+        let _ = parsed.object_reader.read_cm_color(false)?;
+        template
+            .point3_props
+            .insert("mleader_block_content_scale".to_string(), parsed.object_reader.read_3_bit_double()?);
+        template.float_props.insert(
+            "mleader_block_content_rotation".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template.int_props.insert(
+            "mleader_block_connection".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template
+            .bool_props
+            .insert("mleader_enable_annotation_scale".to_string(), parsed.object_reader.read_bit()?);
+
+        if self.version < DxfVersion::AC1021 {
+            let arrow_head_count = parsed.object_reader.read_bit_long()?.max(0) as usize;
+            for idx in 0..arrow_head_count {
+                let is_default = parsed.object_reader.read_bit()?;
+                template
+                    .bool_props
+                    .insert(format!("mleader_arrowhead_default_{idx}"), is_default);
+                let h = self.handle_reference(parsed, 0)?;
+                template
+                    .handle_list_props
+                    .entry("mleader_arrowhead_handles".to_string())
+                    .or_default()
+                    .push(h);
+            }
+        }
+
+        let block_label_count = parsed.object_reader.read_bit_long()?.max(0) as usize;
+        for i in 0..block_label_count {
+            let h = self.handle_reference(parsed, 0)?;
+            template
+                .handle_list_props
+                .entry("mleader_block_attribute_handles".to_string())
+                .or_default()
+                .push(h);
+            let txt = parsed.text_reader.read_variable_text()?;
+            template
+                .text_props
+                .insert(format!("mleader_block_attribute_text_{i}"), txt);
+            template.int_props.insert(
+                format!("mleader_block_attribute_index_{i}"),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            template.float_props.insert(
+                format!("mleader_block_attribute_width_{i}"),
+                parsed.object_reader.read_bit_double()?,
+            );
+        }
+
+        template
+            .bool_props
+            .insert("mleader_text_direction_negative".to_string(), parsed.object_reader.read_bit()?);
+        template.int_props.insert(
+            "mleader_text_align_in_ipe".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_text_attachment_point".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template
+            .float_props
+            .insert("mleader_scale_factor".to_string(), parsed.object_reader.read_bit_double()?);
+
+        if self.r2010_plus() {
+            template.int_props.insert(
+                "mleader_text_attachment_direction".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            template.int_props.insert(
+                "mleader_text_bottom_attachment".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            template.int_props.insert(
+                "mleader_text_top_attachment".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+        }
+        if self.r2013_plus() {
+            template
+                .bool_props
+                .insert("mleader_extended_to_text".to_string(), parsed.object_reader.read_bit()?);
+        }
+
+        Ok(())
+    }
+
+    fn read_multi_leader_annot_context(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+    ) -> Result<()> {
+        let mut leader_root_count = parsed.object_reader.read_bit_long()?;
+        if leader_root_count == 0 {
+            let _b0 = parsed.object_reader.read_bit()?;
+            let _b1 = parsed.object_reader.read_bit()?;
+            let _b2 = parsed.object_reader.read_bit()?;
+            let _b3 = parsed.object_reader.read_bit()?;
+            let _b4 = parsed.object_reader.read_bit()?;
+            let b5 = parsed.object_reader.read_bit()?;
+            let _b6 = parsed.object_reader.read_bit()?;
+            leader_root_count = if b5 { 2 } else { 1 };
+        }
+        template
+            .int_props
+            .insert("mleader_context_root_count".to_string(), leader_root_count as i64);
+
+        for idx in 0..leader_root_count.max(0) as usize {
+            self.read_mleader_root(parsed, template, idx)?;
+        }
+
+        template.float_props.insert(
+            "mleader_ctx_scale_factor".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template
+            .point3_props
+            .insert("mleader_ctx_content_base_point".to_string(), parsed.object_reader.read_3_bit_double()?);
+        template.float_props.insert(
+            "mleader_ctx_text_height".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template.float_props.insert(
+            "mleader_ctx_arrowhead_size".to_string(),
+            parsed.object_reader.read_bit_double()?,
+        );
+        template
+            .float_props
+            .insert("mleader_ctx_landing_gap".to_string(), parsed.object_reader.read_bit_double()?);
+        template.int_props.insert(
+            "mleader_ctx_text_left_attachment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_ctx_text_right_attachment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_ctx_text_alignment".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+        template.int_props.insert(
+            "mleader_ctx_block_content_connection".to_string(),
+            parsed.object_reader.read_bit_short()? as i64,
+        );
+
+        let has_text_contents = parsed.object_reader.read_bit()?;
+        template
+            .bool_props
+            .insert("mleader_ctx_has_text_contents".to_string(), has_text_contents);
+        if has_text_contents {
+            template
+                .text_props
+                .insert("mleader_ctx_text_label".to_string(), parsed.text_reader.read_variable_text()?);
+            template
+                .point3_props
+                .insert("mleader_ctx_text_normal".to_string(), parsed.object_reader.read_3_bit_double()?);
+            template
+                .handle_props
+                .insert("mleader_ctx_text_style_handle".to_string(), self.handle_reference(parsed, 0)?);
+            template
+                .point3_props
+                .insert("mleader_ctx_text_location".to_string(), parsed.object_reader.read_3_bit_double()?);
+            template
+                .point3_props
+                .insert("mleader_ctx_direction".to_string(), parsed.object_reader.read_3_bit_double()?);
+            template
+                .float_props
+                .insert("mleader_ctx_text_rotation".to_string(), parsed.object_reader.read_bit_double()?);
+            template
+                .float_props
+                .insert("mleader_ctx_boundary_width".to_string(), parsed.object_reader.read_bit_double()?);
+            template
+                .float_props
+                .insert("mleader_ctx_boundary_height".to_string(), parsed.object_reader.read_bit_double()?);
+            template
+                .float_props
+                .insert("mleader_ctx_line_spacing_factor".to_string(), parsed.object_reader.read_bit_double()?);
+            template.int_props.insert(
+                "mleader_ctx_line_spacing_style".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            let _ = parsed.object_reader.read_cm_color(false)?;
+            template.int_props.insert(
+                "mleader_ctx_text_attachment_point".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            template.int_props.insert(
+                "mleader_ctx_flow_direction".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            let _ = parsed.object_reader.read_cm_color(false)?;
+            template.float_props.insert(
+                "mleader_ctx_background_scale_factor".to_string(),
+                parsed.object_reader.read_bit_double()?,
+            );
+            template.int_props.insert(
+                "mleader_ctx_background_transparency".to_string(),
+                parsed.object_reader.read_bit_long()? as i64,
+            );
+            template
+                .bool_props
+                .insert("mleader_ctx_background_fill_enabled".to_string(), parsed.object_reader.read_bit()?);
+            template
+                .bool_props
+                .insert("mleader_ctx_background_mask_fill_on".to_string(), parsed.object_reader.read_bit()?);
+            template.int_props.insert(
+                "mleader_ctx_column_type".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            template
+                .bool_props
+                .insert("mleader_ctx_text_height_auto".to_string(), parsed.object_reader.read_bit()?);
+            template.float_props.insert(
+                "mleader_ctx_column_width".to_string(),
+                parsed.object_reader.read_bit_double()?,
+            );
+            template.float_props.insert(
+                "mleader_ctx_column_gutter".to_string(),
+                parsed.object_reader.read_bit_double()?,
+            );
+            template
+                .bool_props
+                .insert("mleader_ctx_column_flow_reversed".to_string(), parsed.object_reader.read_bit()?);
+
+            let col_count = parsed.object_reader.read_bit_long()?.max(0) as usize;
+            template
+                .int_props
+                .insert("mleader_ctx_column_size_count".to_string(), col_count as i64);
+            for i in 0..col_count {
+                template.float_props.insert(
+                    format!("mleader_ctx_column_size_{i}"),
+                    parsed.object_reader.read_bit_double()?,
+                );
+            }
+            template
+                .bool_props
+                .insert("mleader_ctx_word_break".to_string(), parsed.object_reader.read_bit()?);
+            let _ = parsed.object_reader.read_bit()?;
+        } else {
+            let has_contents_block = parsed.object_reader.read_bit()?;
+            template
+                .bool_props
+                .insert("mleader_ctx_has_contents_block".to_string(), has_contents_block);
+            if has_contents_block {
+                template
+                    .handle_props
+                    .insert("mleader_ctx_block_record_handle".to_string(), self.handle_reference(parsed, 0)?);
+                template.point3_props.insert(
+                    "mleader_ctx_block_normal".to_string(),
+                    parsed.object_reader.read_3_bit_double()?,
+                );
+                template.point3_props.insert(
+                    "mleader_ctx_block_location".to_string(),
+                    parsed.object_reader.read_3_bit_double()?,
+                );
+                template.point3_props.insert(
+                    "mleader_ctx_block_scale".to_string(),
+                    parsed.object_reader.read_3_bit_double()?,
+                );
+                template.float_props.insert(
+                    "mleader_ctx_block_rotation".to_string(),
+                    parsed.object_reader.read_bit_double()?,
+                );
+                let _ = parsed.object_reader.read_cm_color(false)?;
+
+                for i in 0..16 {
+                    template.float_props.insert(
+                        format!("mleader_ctx_transform_{i}"),
+                        parsed.object_reader.read_bit_double()?,
+                    );
+                }
+            }
+        }
+
+        template
+            .point3_props
+            .insert("mleader_ctx_base_point".to_string(), parsed.object_reader.read_3_bit_double()?);
+        template.point3_props.insert(
+            "mleader_ctx_base_direction".to_string(),
+            parsed.object_reader.read_3_bit_double()?,
+        );
+        template.point3_props.insert(
+            "mleader_ctx_base_vertical".to_string(),
+            parsed.object_reader.read_3_bit_double()?,
+        );
+        template
+            .bool_props
+            .insert("mleader_ctx_normal_reversed".to_string(), parsed.object_reader.read_bit()?);
+
+        if self.r2010_plus() {
+            template.int_props.insert(
+                "mleader_ctx_top_attachment".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            template.int_props.insert(
+                "mleader_ctx_bottom_attachment".to_string(),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn read_mleader_root(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+        root_index: usize,
+    ) -> Result<()> {
+        template.bool_props.insert(
+            format!("mleader_root_{root_index}_content_valid"),
+            parsed.object_reader.read_bit()?,
+        );
+        template.bool_props.insert(
+            format!("mleader_root_{root_index}_unknown"),
+            parsed.object_reader.read_bit()?,
+        );
+        template.point3_props.insert(
+            format!("mleader_root_{root_index}_connection_point"),
+            parsed.object_reader.read_3_bit_double()?,
+        );
+        template.point3_props.insert(
+            format!("mleader_root_{root_index}_direction"),
+            parsed.object_reader.read_3_bit_double()?,
+        );
+
+        let pair_count = parsed.object_reader.read_bit_long()?.max(0) as usize;
+        template.int_props.insert(
+            format!("mleader_root_{root_index}_break_pair_count"),
+            pair_count as i64,
+        );
+        for i in 0..pair_count {
+            template.point3_props.insert(
+                format!("mleader_root_{root_index}_break_start_{i}"),
+                parsed.object_reader.read_3_bit_double()?,
+            );
+            template.point3_props.insert(
+                format!("mleader_root_{root_index}_break_end_{i}"),
+                parsed.object_reader.read_3_bit_double()?,
+            );
+        }
+
+        template.int_props.insert(
+            format!("mleader_root_{root_index}_leader_index"),
+            parsed.object_reader.read_bit_long()? as i64,
+        );
+        template.float_props.insert(
+            format!("mleader_root_{root_index}_landing_distance"),
+            parsed.object_reader.read_bit_double()?,
+        );
+
+        let line_count = parsed.object_reader.read_bit_long()?.max(0) as usize;
+        template.int_props.insert(
+            format!("mleader_root_{root_index}_line_count"),
+            line_count as i64,
+        );
+        for i in 0..line_count {
+            self.read_mleader_line(parsed, template, root_index, i)?;
+        }
+
+        if self.r2010_plus() {
+            template.int_props.insert(
+                format!("mleader_root_{root_index}_text_attachment_direction"),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn read_mleader_line(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+        root_index: usize,
+        line_index: usize,
+    ) -> Result<()> {
+        let point_count = parsed.object_reader.read_bit_long()?.max(0) as usize;
+        template.int_props.insert(
+            format!("mleader_root_{root_index}_line_{line_index}_point_count"),
+            point_count as i64,
+        );
+        for i in 0..point_count {
+            template.point3_props.insert(
+                format!("mleader_root_{root_index}_line_{line_index}_point_{i}"),
+                parsed.object_reader.read_3_bit_double()?,
+            );
+        }
+
+        let break_info_count = parsed.object_reader.read_bit_long()?;
+        template.int_props.insert(
+            format!("mleader_root_{root_index}_line_{line_index}_break_info_count"),
+            break_info_count as i64,
+        );
+        if break_info_count > 0 {
+            template.int_props.insert(
+                format!("mleader_root_{root_index}_line_{line_index}_segment_index"),
+                parsed.object_reader.read_bit_long()? as i64,
+            );
+            let sep_count = parsed.object_reader.read_bit_long()?.max(0) as usize;
+            template.int_props.insert(
+                format!("mleader_root_{root_index}_line_{line_index}_start_end_count"),
+                sep_count as i64,
+            );
+            for i in 0..sep_count {
+                template.point3_props.insert(
+                    format!("mleader_root_{root_index}_line_{line_index}_start_{i}"),
+                    parsed.object_reader.read_3_bit_double()?,
+                );
+                template.point3_props.insert(
+                    format!("mleader_root_{root_index}_line_{line_index}_end_{i}"),
+                    parsed.object_reader.read_3_bit_double()?,
+                );
+            }
+        }
+
+        template.int_props.insert(
+            format!("mleader_root_{root_index}_line_{line_index}_index"),
+            parsed.object_reader.read_bit_long()? as i64,
+        );
+
+        if self.r2010_plus() {
+            template.int_props.insert(
+                format!("mleader_root_{root_index}_line_{line_index}_path_type"),
+                parsed.object_reader.read_bit_short()? as i64,
+            );
+            let _ = parsed.object_reader.read_cm_color(false)?;
+            template.handle_props.insert(
+                format!("mleader_root_{root_index}_line_{line_index}_line_type_handle"),
+                self.handle_reference(parsed, 0)?,
+            );
+            template.int_props.insert(
+                format!("mleader_root_{root_index}_line_{line_index}_line_weight"),
+                parsed.object_reader.read_bit_long()? as i64,
+            );
+            template.float_props.insert(
+                format!("mleader_root_{root_index}_line_{line_index}_arrow_size"),
+                parsed.object_reader.read_bit_double()?,
+            );
+            template.handle_props.insert(
+                format!("mleader_root_{root_index}_line_{line_index}_arrow_symbol_handle"),
+                self.handle_reference(parsed, 0)?,
+            );
+            template.int_props.insert(
+                format!("mleader_root_{root_index}_line_{line_index}_override_flags"),
+                parsed.object_reader.read_bit_long()? as i64,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn read_xrecord(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+    ) -> Result<()> {
+        self.read_common_non_entity_data(parsed, template)?;
+
+        let end = parsed.object_reader.read_bit_long()? as i64 + parsed.object_reader.position()? as i64;
+        let mut item_index = 0usize;
+        while (parsed.object_reader.position()? as i64) < end {
+            let code = parsed.object_reader.read_short()? as i32;
+            let value_type = GroupCodeValueType::from_raw_code(code);
+            match value_type {
+                GroupCodeValueType::String => {
+                    template
+                        .text_props
+                        .insert(format!("xrecord_{code}_{item_index}"), parsed.object_reader.read_text_unicode()?);
+                }
+                GroupCodeValueType::Double => {
+                    if code == 10 {
+                        let p = Vector3::new(
+                            parsed.object_reader.read_double()?,
+                            parsed.object_reader.read_double()?,
+                            parsed.object_reader.read_double()?,
+                        );
+                        template
+                            .point3_props
+                            .insert(format!("xrecord_{code}_{item_index}"), p);
+                    } else {
+                        template.float_props.insert(
+                            format!("xrecord_{code}_{item_index}"),
+                            parsed.object_reader.read_double()?,
+                        );
+                    }
+                }
+                GroupCodeValueType::Byte => {
+                    template.int_props.insert(
+                        format!("xrecord_{code}_{item_index}"),
+                        parsed.object_reader.read_byte()? as i64,
+                    );
+                }
+                GroupCodeValueType::Int16 => {
+                    template.int_props.insert(
+                        format!("xrecord_{code}_{item_index}"),
+                        parsed.object_reader.read_short()? as i64,
+                    );
+                }
+                GroupCodeValueType::Int32 => {
+                    template.int_props.insert(
+                        format!("xrecord_{code}_{item_index}"),
+                        parsed.object_reader.read_raw_long()?,
+                    );
+                }
+                GroupCodeValueType::Int64 => {
+                    template.int_props.insert(
+                        format!("xrecord_{code}_{item_index}"),
+                        parsed.object_reader.read_raw_u_long()? as i64,
+                    );
+                }
+                GroupCodeValueType::Handle => {
+                    if code == 330 || code == 1005 {
+                        template
+                            .handle_list_props
+                            .entry("xrecord_handle_refs".to_string())
+                            .or_default()
+                            .push(parsed.object_reader.read_raw_u_long()?);
+                    } else {
+                        let text = parsed.object_reader.read_text_unicode()?;
+                        if let Ok(value) = u64::from_str_radix(text.trim(), 16) {
+                            template
+                                .handle_list_props
+                                .entry("xrecord_handle_refs".to_string())
+                                .or_default()
+                                .push(value);
+                        }
+                    }
+                }
+                GroupCodeValueType::Bool => {
+                    template.bool_props.insert(
+                        format!("xrecord_{code}_{item_index}"),
+                        parsed.object_reader.read_byte()? > 0,
+                    );
+                }
+                GroupCodeValueType::BinaryData => {
+                    let len = parsed.object_reader.read_byte()? as usize;
+                    template.binary_props.insert(
+                        format!("xrecord_{code}_{item_index}"),
+                        parsed.object_reader.read_bytes(len)?,
+                    );
+                }
+                GroupCodeValueType::Point3D | GroupCodeValueType::None => {
+                    // Fallback for unsupported/unknown codes in XRECORD stream
+                    template.int_props.insert(
+                        format!("xrecord_unknown_code_{item_index}"),
+                        code as i64,
+                    );
+                    break;
+                }
+            }
+            item_index += 1;
+        }
+
+        template
+            .int_props
+            .insert("xrecord_item_count".to_string(), item_index as i64);
+
+        if self.version >= DxfVersion::AC1015 {
+            template
+                .int_props
+                .insert("xrecord_cloning_flags".to_string(), parsed.object_reader.read_bit_short()? as i64);
+        }
+
+        let size_bits = parsed.object_initial_pos + (parsed.size as u64 * 8) - 7;
+        while parsed.handles_reader.position_in_bits()? < size_bits {
+            let h = self.handle_reference(parsed, 0)?;
+            if h == 0 {
+                break;
+            }
+            template
+                .handle_list_props
+                .entry("xrecord_tail_handles".to_string())
+                .or_default()
+                .push(h);
+        }
 
         Ok(())
     }
@@ -1198,6 +1832,22 @@ impl DwgObjectReader {
             template
                 .bool_props
                 .insert("proxy_original_data_is_dxf".to_string(), parsed.object_reader.read_bit()?);
+        }
+
+        // Databits block: store remaining proxy payload bytes until handles section.
+        let start_bits = parsed.object_reader.position_in_bits()?;
+        let mut end_bits = parsed.handles_reader.position_in_bits()?;
+        if end_bits <= start_bits {
+            end_bits = parsed.object_initial_pos + (parsed.size as u64 * 8);
+        }
+
+        if end_bits > start_bits {
+            let payload_bytes = ((end_bits - start_bits) as usize + 7) / 8;
+            let payload = parsed.object_reader.read_bytes(payload_bytes)?;
+            template
+                .binary_props
+                .insert("proxy_data_bits".to_string(), payload.clone());
+            template.data = payload;
         }
 
         Ok(())
