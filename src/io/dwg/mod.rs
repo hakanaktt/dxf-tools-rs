@@ -10,6 +10,7 @@ pub mod dwg_reader;
 pub mod dwg_reader_configuration;
 pub mod dwg_section_io;
 pub mod dwg_stream_readers;
+pub mod dwg_stream_writers;
 pub mod file_headers;
 
 pub use crc::{apply_crc8, crc8_decode, crc8_value, crc32_update, CRC_TABLE, CRC32_TABLE};
@@ -33,4 +34,9 @@ pub use file_headers::{
     DwgFileHeaderAC21, DwgFileHeaderData, DwgLocalSectionMap, DwgSectionDefinition,
     DwgSectionDescriptor, DwgSectionHash, DwgSectionLocatorRecord, AC15_END_SENTINEL,
     END_SENTINELS, START_SENTINELS,
+};
+
+pub use dwg_stream_writers::{
+    DwgWriter, DwgWriterConfiguration, DwgStreamWriter, DwgLz77Ac18Compressor,
+    write_dwg, write_dwg_to_bytes,
 };
