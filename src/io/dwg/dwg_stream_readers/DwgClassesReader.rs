@@ -34,4 +34,8 @@ impl DwgClassesReader {
         }
         Ok(classes)
     }
+
+    pub fn get_curr_pos(reader: &mut dyn DwgStreamReader) -> Result<u64> {
+        reader.position()
+    }
 }

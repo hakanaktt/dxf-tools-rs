@@ -49,4 +49,32 @@ impl DwgObjectReaderObjects {
             value_text,
         })
     }
+
+    pub fn read_block_1_pt_parameter(
+        reader: &mut dyn DwgStreamReader,
+    ) -> Result<DwgBlockElementData> {
+        Self::read_block_element(reader)
+    }
+
+    pub fn read_block_grip_location_component(
+        reader: &mut dyn DwgStreamReader,
+    ) -> Result<DwgBlockElementData> {
+        Self::read_block_element(reader)
+    }
+
+    pub fn read_block_parameter(reader: &mut dyn DwgStreamReader) -> Result<DwgBlockElementData> {
+        Self::read_block_element(reader)
+    }
+
+    pub fn read_block_representation_data(
+        reader: &mut dyn DwgStreamReader,
+    ) -> Result<DwgBlockElementData> {
+        Self::read_block_element(reader)
+    }
+
+    pub fn read_block_visibility_parameter(
+        reader: &mut dyn DwgStreamReader,
+    ) -> Result<DwgBlockElementData> {
+        Self::read_block_element(reader)
+    }
 }

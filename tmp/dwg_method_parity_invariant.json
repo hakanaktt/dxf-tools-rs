@@ -1,0 +1,135 @@
+[
+    {
+        "File":  "DwgObjectReader",
+        "RustFns":  46,
+        "CsMethods":  130,
+        "MissingCount":  97,
+        "MissingTop":  "readXrefDependantBit, readUnlistedType, readEvaluationGraph, readBlockAction, readSpatialFilter, read4x3Matrix, readBlockFlipAction, readBlock2PtParameter, readBlockFlipParameter, readUnknownEntity, readUnknownNonGraphicalObject, readText, readAttribute, readAttributeDefinition, readBlock, readEndBlock, readSeqend, readInsert, readMInsert, readVertex2D"
+    },
+    {
+        "File":  "DwgObjectReader.Entities",
+        "RustFns":  4,
+        "CsMethods":  14,
+        "MissingCount":  11,
+        "MissingTop":  "readTableCellData, readTableContent, readCustomTableData, readCustomTableDataValue, readStringCellValue, readCellValueXY, readCellValueXYZ, readCellStyle, readBorder, readCellContentGeometry, readCellContentFormat"
+    },
+    {
+        "File":  "DwgStreamReaderBase",
+        "RustFns":  58,
+        "CsMethods":  53,
+        "MissingCount":  9,
+        "MissingTop":  "GetStreamHandler, Explore, readHandle, applyFlagToPosition, applyShiftToLasByte, throwException, applyShiftToArr, read3bits, julianToDate"
+    },
+    {
+        "File":  "DwgLZ77AC21Decompressor",
+        "RustFns":  7,
+        "CsMethods":  14,
+        "MissingCount":  8,
+        "MissingTop":  "copyDelegate, copy, copy1b, copy2b, copy3b, copy4b, copy8b, copy16b"
+    },
+    {
+        "File":  "DwgObjectReader.Objects",
+        "RustFns":  3,
+        "CsMethods":  7,
+        "MissingCount":  5,
+        "MissingTop":  "readBlock1PtParameter, readBlockGripLocationComponent, readBlockParameter, readBlockRepresentationData, readBlockVisibilityParameter"
+    },
+    {
+        "File":  "DwgStreamReaderAC15",
+        "RustFns":  5,
+        "CsMethods":  2,
+        "MissingCount":  2,
+        "MissingTop":  "ReadBitExtrusion, ReadBitThickness"
+    },
+    {
+        "File":  "DwgStreamReaderAC18",
+        "RustFns":  7,
+        "CsMethods":  2,
+        "MissingCount":  2,
+        "MissingTop":  "ReadCmColor, ReadEnColor"
+    },
+    {
+        "File":  "DwgSummaryInfoReader",
+        "RustFns":  1,
+        "CsMethods":  3,
+        "MissingCount":  2,
+        "MissingTop":  "readString, readUnicodeString"
+    },
+    {
+        "File":  "DwgStreamReaderAC21",
+        "RustFns":  7,
+        "CsMethods":  2,
+        "MissingCount":  2,
+        "MissingTop":  "ReadTextUnicode, ReadVariableText"
+    },
+    {
+        "File":  "DwgStreamReaderAC24",
+        "RustFns":  6,
+        "CsMethods":  1,
+        "MissingCount":  1,
+        "MissingTop":  "ReadObjectType"
+    },
+    {
+        "File":  "DwgHandleReader",
+        "RustFns":  2,
+        "CsMethods":  1,
+        "MissingCount":  1,
+        "MissingTop":  "Read"
+    },
+    {
+        "File":  "DwgClassesReader",
+        "RustFns":  1,
+        "CsMethods":  2,
+        "MissingCount":  1,
+        "MissingTop":  "getCurrPos"
+    },
+    {
+        "File":  "DwgAppInfoReader",
+        "RustFns":  1,
+        "CsMethods":  2,
+        "MissingCount":  1,
+        "MissingTop":  "readR18"
+    },
+    {
+        "File":  "DwgHeaderReader",
+        "RustFns":  17,
+        "CsMethods":  1,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    },
+    {
+        "File":  "IDwgStreamReader",
+        "RustFns":  54,
+        "CsMethods":  0,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    },
+    {
+        "File":  "DwgStreamReaderAC12",
+        "RustFns":  5,
+        "CsMethods":  0,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    },
+    {
+        "File":  "DwgPreviewReader",
+        "RustFns":  1,
+        "CsMethods":  1,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    },
+    {
+        "File":  "DwgLZ77AC18Decompressor",
+        "RustFns":  7,
+        "CsMethods":  6,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    },
+    {
+        "File":  "DwgMergedReader",
+        "RustFns":  56,
+        "CsMethods":  48,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    }
+]

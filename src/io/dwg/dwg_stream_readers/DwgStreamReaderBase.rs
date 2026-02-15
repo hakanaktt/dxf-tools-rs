@@ -3,7 +3,7 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use byteorder::{LittleEndian, ReadBytesExt};
 
 use crate::error::{DxfError, Result};
-use crate::types::{Color, Transparency, Vector2, Vector3};
+use crate::types::{Color, DxfVersion, Transparency, Vector2, Vector3};
 
 use super::idwg_stream_reader::{DwgObjectType, DwgReferenceType, DwgStreamReader, ReadSeek};
 
@@ -25,6 +25,13 @@ impl DwgStreamReaderBase {
             last_byte: 0,
             text_stream: None,
         }
+    }
+
+    pub fn get_stream_handler<R: Read + Seek + 'static>(
+        _version: DxfVersion,
+        stream: R,
+    ) -> Self {
+        Self::new(Box::new(stream))
     }
 
     pub fn with_text_stream(mut self, text_stream: Vec<u8>) -> Self {
@@ -54,6 +61,58 @@ impl DwgStreamReaderBase {
         self.last_byte = next;
         let low = next >> (8 - self.bit_shift);
         Ok(high | low)
+    }
+
+    fn read_handle(&mut self) -> Result<u64> {
+        self.handle_reference()
+    }
+
+    fn read_3_bits(&mut self) -> Result<u8> {
+        let mut value = 0u8;
+        if self.read_bit()? {
+            value |= 0b100;
+        }
+        if self.read_bit()? {
+            value |= 0b010;
+        }
+        if self.read_bit()? {
+            value |= 0b001;
+        }
+        Ok(value)
+    }
+
+    fn apply_flag_to_position(&mut self, position: u64) -> Result<u64> {
+        self.set_position_by_flag(position)
+    }
+
+    fn apply_shift_to_las_byte(value: u8, shift: u8) -> u8 {
+        value << (shift & 7)
+    }
+
+    fn apply_shift_to_arr(bytes: &mut [u8], shift: u8) {
+        let shift = shift & 7;
+        if shift == 0 || bytes.is_empty() {
+            return;
+        }
+
+        let mut prev = 0u8;
+        for b in bytes.iter_mut() {
+            let current = *b;
+            *b = (current << shift) | (prev >> (8 - shift));
+            prev = current;
+        }
+    }
+
+    fn julian_to_date(days: i32, millis: i32) -> (i32, i32) {
+        (days, millis)
+    }
+
+    fn throw_exception(message: &str) -> DxfError {
+        DxfError::Parse(message.to_string())
+    }
+
+    pub fn explore(&mut self) -> Result<u64> {
+        self.position_in_bits()
     }
 }
 

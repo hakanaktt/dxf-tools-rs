@@ -16,4 +16,8 @@ impl DwgAppInfoReader {
         }
         Ok(entries)
     }
+
+    pub fn read_r18(reader: &mut dyn DwgStreamReader) -> Result<Vec<(String, String)>> {
+        Self::read(reader)
+    }
 }

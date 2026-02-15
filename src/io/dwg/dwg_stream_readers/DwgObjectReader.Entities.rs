@@ -85,4 +85,53 @@ impl DwgObjectReaderEntities {
         }
         Ok(content)
     }
+
+    pub fn read_table_cell_data(reader: &mut dyn DwgStreamReader) -> Result<DwgTableCell> {
+        Self::read_table_cell(reader)
+    }
+
+    pub fn read_table_content(reader: &mut dyn DwgStreamReader) -> Result<DwgTableCellContent> {
+        Self::read_table_cell_content(reader)
+    }
+
+    pub fn read_custom_table_data(reader: &mut dyn DwgStreamReader) -> Result<Vec<u8>> {
+        let len = reader.read_bit_long()?.max(0) as usize;
+        reader.read_bytes(len)
+    }
+
+    pub fn read_custom_table_data_value(reader: &mut dyn DwgStreamReader) -> Result<String> {
+        reader.read_variable_text()
+    }
+
+    pub fn read_string_cell_value(reader: &mut dyn DwgStreamReader) -> Result<String> {
+        reader.read_variable_text()
+    }
+
+    pub fn read_cell_value_xy(reader: &mut dyn DwgStreamReader) -> Result<(f64, f64)> {
+        Ok((reader.read_bit_double()?, reader.read_bit_double()?))
+    }
+
+    pub fn read_cell_value_xyz(reader: &mut dyn DwgStreamReader) -> Result<(f64, f64, f64)> {
+        Ok((
+            reader.read_bit_double()?,
+            reader.read_bit_double()?,
+            reader.read_bit_double()?,
+        ))
+    }
+
+    pub fn read_cell_style(reader: &mut dyn DwgStreamReader) -> Result<i32> {
+        reader.read_bit_long()
+    }
+
+    pub fn read_border(reader: &mut dyn DwgStreamReader) -> Result<i32> {
+        reader.read_bit_long()
+    }
+
+    pub fn read_cell_content_geometry(reader: &mut dyn DwgStreamReader) -> Result<i32> {
+        reader.read_bit_long()
+    }
+
+    pub fn read_cell_content_format(reader: &mut dyn DwgStreamReader) -> Result<String> {
+        reader.read_variable_text()
+    }
 }

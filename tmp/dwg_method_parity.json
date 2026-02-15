@@ -1,0 +1,135 @@
+[
+    {
+        "File":  "DwgObjectReader",
+        "RustFns":  46,
+        "CsMethods":  130,
+        "MissingCount":  99,
+        "MissingTop":  "readXrefDependantBit, readUnlistedType, readEvaluationGraph, readBlockAction, readSpatialFilter, read4x3Matrix, readBlockFlipAction, readBlock2PtParameter, readBlockFlipParameter, readUnknownEntity, readUnknownNonGraphicalObject, readText, readAttribute, readAttributeDefinition, readBlock, readEndBlock, readSeqend, readInsert, readMInsert, readInsertCommonData"
+    },
+    {
+        "File":  "DwgStreamReaderBase",
+        "RustFns":  58,
+        "CsMethods":  53,
+        "MissingCount":  12,
+        "MissingTop":  "GetStreamHandler, Explore, readHandle, ReadColorByIndex, PositionInBits, SetPositionInBits, applyFlagToPosition, applyShiftToLasByte, throwException, applyShiftToArr, read3bits, julianToDate"
+    },
+    {
+        "File":  "DwgObjectReader.Entities",
+        "RustFns":  4,
+        "CsMethods":  14,
+        "MissingCount":  11,
+        "MissingTop":  "readTableCellData, readTableContent, readCustomTableData, readCustomTableDataValue, readStringCellValue, readCellValueXY, readCellValueXYZ, readCellStyle, readBorder, readCellContentGeometry, readCellContentFormat"
+    },
+    {
+        "File":  "DwgLZ77AC21Decompressor",
+        "RustFns":  7,
+        "CsMethods":  14,
+        "MissingCount":  10,
+        "MissingTop":  "copyDelegate, nextIndex, readInstructions, copy, copy1b, copy2b, copy3b, copy4b, copy8b, copy16b"
+    },
+    {
+        "File":  "DwgMergedReader",
+        "RustFns":  56,
+        "CsMethods":  48,
+        "MissingCount":  5,
+        "MissingTop":  "PositionInBits, ReadInt, ReadColorByIndex, ReadUInt, SetPositionInBits"
+    },
+    {
+        "File":  "DwgObjectReader.Objects",
+        "RustFns":  3,
+        "CsMethods":  7,
+        "MissingCount":  5,
+        "MissingTop":  "readBlock1PtParameter, readBlockGripLocationComponent, readBlockParameter, readBlockRepresentationData, readBlockVisibilityParameter"
+    },
+    {
+        "File":  "DwgStreamReaderAC15",
+        "RustFns":  5,
+        "CsMethods":  2,
+        "MissingCount":  2,
+        "MissingTop":  "ReadBitExtrusion, ReadBitThickness"
+    },
+    {
+        "File":  "DwgStreamReaderAC18",
+        "RustFns":  7,
+        "CsMethods":  2,
+        "MissingCount":  2,
+        "MissingTop":  "ReadCmColor, ReadEnColor"
+    },
+    {
+        "File":  "DwgStreamReaderAC21",
+        "RustFns":  7,
+        "CsMethods":  2,
+        "MissingCount":  2,
+        "MissingTop":  "ReadTextUnicode, ReadVariableText"
+    },
+    {
+        "File":  "DwgSummaryInfoReader",
+        "RustFns":  1,
+        "CsMethods":  3,
+        "MissingCount":  2,
+        "MissingTop":  "readString, readUnicodeString"
+    },
+    {
+        "File":  "DwgStreamReaderAC24",
+        "RustFns":  6,
+        "CsMethods":  1,
+        "MissingCount":  1,
+        "MissingTop":  "ReadObjectType"
+    },
+    {
+        "File":  "DwgAppInfoReader",
+        "RustFns":  1,
+        "CsMethods":  2,
+        "MissingCount":  1,
+        "MissingTop":  "readR18"
+    },
+    {
+        "File":  "DwgHandleReader",
+        "RustFns":  2,
+        "CsMethods":  1,
+        "MissingCount":  1,
+        "MissingTop":  "Read"
+    },
+    {
+        "File":  "DwgClassesReader",
+        "RustFns":  1,
+        "CsMethods":  2,
+        "MissingCount":  1,
+        "MissingTop":  "getCurrPos"
+    },
+    {
+        "File":  "IDwgStreamReader",
+        "RustFns":  54,
+        "CsMethods":  0,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    },
+    {
+        "File":  "DwgHeaderReader",
+        "RustFns":  17,
+        "CsMethods":  1,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    },
+    {
+        "File":  "DwgStreamReaderAC12",
+        "RustFns":  5,
+        "CsMethods":  0,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    },
+    {
+        "File":  "DwgPreviewReader",
+        "RustFns":  1,
+        "CsMethods":  1,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    },
+    {
+        "File":  "DwgLZ77AC18Decompressor",
+        "RustFns":  7,
+        "CsMethods":  6,
+        "MissingCount":  0,
+        "MissingTop":  ""
+    }
+]

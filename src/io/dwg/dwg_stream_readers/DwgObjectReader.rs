@@ -2353,6 +2353,127 @@ impl DwgObjectReader {
         Ok(value)
     }
 
+    fn read_entity_stub(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+    ) -> Result<()> {
+        self.read_common_entity_data(parsed, template)
+    }
+
+    fn read_non_graphical_stub(
+        &mut self,
+        parsed: &mut ParsedObjectStreams,
+        template: &mut DwgRawObject,
+    ) -> Result<()> {
+        self.read_common_non_entity_data(parsed, template)
+    }
+
+    fn looks_like_utf16_le(&self, bytes: &[u8]) -> bool {
+        if bytes.len() < 2 || !bytes.len().is_multiple_of(2) {
+            return false;
+        }
+        bytes.chunks_exact(2).any(|pair| pair[1] == 0)
+    }
+
+    fn read_3d_face(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_4x3_matrix(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_app_id(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_arc(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_attribute(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_text_like(parsed, template, RawObjectType::Attrib) }
+    fn read_attribute_definition(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_text_like(parsed, template, RawObjectType::AttDef) }
+    fn read_block(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_block_2_pt_parameter(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_block_action(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_block_control_object(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_block_flip_action(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_block_flip_parameter(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_block_header(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_border_style(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_cad_image(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_circle(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_common_dictionary(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_dictionary(parsed, template) }
+    fn read_common_dimension_aligned_data(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_common_dimension_data(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_common_dimension_handles(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_db_color(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_dictionary_var(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_dim_aligned(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_dim_angular_3pt(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_dim_diameter(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_dim_line_2pt(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_dim_linear(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_dim_ordinate(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_dim_radius(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_dim_style(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_ellipse(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_end_block(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_evaluation_graph(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_geo_data(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_group(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_image_definition(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_image_definition_reactor(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_insert(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_insert_like(parsed, template, RawObjectType::Insert) }
+    fn read_layer(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_layout(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_leader_line(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_leader_root(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_line(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_line_type_segment_texts(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_line_type_text_string(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_l_type(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_l_type_control_object(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_lw_polyline(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_material(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_matrix4(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_mesh(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_m_insert(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_insert_like(parsed, template, RawObjectType::MInsert) }
+    fn read_m_line(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_m_line_style(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_ole2_frame(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_pdf_definition(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_pdf_underlay(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_pface_vertex(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_place_holder(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_plot_settings(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_point(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_polyface_mesh(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_polyline_2d(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_polyline_3d(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_polyline_mesh(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_raster_variables(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_ray(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_row_cell_style(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_scale(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_seqend(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_shape(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_solid(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_solid3d(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_sortents_table(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_spatial_filter(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_spline(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_table_style(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_text(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_text_like(parsed, template, RawObjectType::Text) }
+    fn read_text_style(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_tolerance(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_ucs(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_unknown_entity(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_unknown_non_graphical_object(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_unlisted_type(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_unknown_non_graphical_object(parsed, template) }
+    fn read_vertex_2d(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_vertex_3d(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_view(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_viewport(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_viewport_entity_control(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_viewport_entity_header(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_visual_style(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_v_port(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_non_graphical_stub(parsed, template) }
+    fn read_wire(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_x_line(&mut self, parsed: &mut ParsedObjectStreams, template: &mut DwgRawObject) -> Result<()> { self.read_entity_stub(parsed, template) }
+    fn read_xref_dependant_bit(&mut self, parsed: &mut ParsedObjectStreams, _template: &mut DwgRawObject) -> Result<bool> {
+        parsed.object_reader.read_bit()
+    }
+
     #[inline]
     fn r13_14_only(&self) -> bool {
         matches!(self.version, DxfVersion::AC1012 | DxfVersion::AC1014)

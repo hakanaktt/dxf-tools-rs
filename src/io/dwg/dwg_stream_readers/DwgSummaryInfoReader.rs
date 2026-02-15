@@ -18,4 +18,12 @@ impl DwgSummaryInfoReader {
         }
         Ok(info)
     }
+
+    pub fn read_string(reader: &mut dyn DwgStreamReader) -> Result<String> {
+        reader.read_variable_text()
+    }
+
+    pub fn read_unicode_string(reader: &mut dyn DwgStreamReader) -> Result<String> {
+        reader.read_text_unicode()
+    }
 }

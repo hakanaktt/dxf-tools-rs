@@ -6,6 +6,10 @@ use super::idwg_stream_reader::DwgStreamReader;
 pub struct DwgHandleReader;
 
 impl DwgHandleReader {
+    pub fn read(reader: &mut dyn DwgStreamReader, owner: u64) -> Result<u64> {
+        Self::read_handle(reader, owner)
+    }
+
     pub fn read_handle(reader: &mut dyn DwgStreamReader, owner: u64) -> Result<u64> {
         reader.handle_reference_from(owner)
     }
