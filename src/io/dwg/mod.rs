@@ -6,6 +6,7 @@ pub mod crc32_stream_handler;
 pub mod dwg_checksum_calculator;
 pub mod dwg_document_builder;
 pub mod dwg_header_handles_collection;
+pub mod dwg_reader;
 pub mod dwg_reader_configuration;
 pub mod dwg_section_io;
 pub mod dwg_stream_readers;
@@ -17,6 +18,7 @@ pub use crc32_stream_handler::Crc32StreamHandler;
 pub use dwg_checksum_calculator::{calculate, compression_calculator, MAGIC_SEQUENCE};
 pub use dwg_document_builder::DwgDocumentBuilder;
 pub use dwg_header_handles_collection::DwgHeaderHandlesCollection;
+pub use dwg_reader::DwgReader;
 pub use dwg_reader_configuration::DwgReaderConfiguration;
 pub use dwg_section_io::{check_sentinel, DwgSectionContext};
 
